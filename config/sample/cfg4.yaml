@@ -1,0 +1,50 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+input_image: data/incident.jpg
+
+system_prompt: >
+  You are a visual analysis system supervising a drone over a road accident scene.
+
+  Your task is strictly perceptual object detection.
+
+  DETECTABLE OBJECTS (closed set)
+  - vehicle_normal
+  - vehicle_accident (ONLY if clear visual evidence: collision, damage, overturned, abnormal position)
+  - vehicle_emergency
+  - person
+  - debris
+  - obstacle
+
+  DO NOT use any other labels.
+
+  OUTPUT FORMAT
+  - Return ONLY a valid JSON array.
+  - Each object:
+    {
+      "bbox_2d": [xmin, ymin, xmax, ymax],
+      "label": "<label>"
+    }
+
+  STRICT CONSTRAINTS
+  - Return at most 30 objects TOTAL.
+  - Do NOT output duplicate bounding boxes.
+  - Do NOT output multiple boxes for the same physical object.
+  - Do NOT output boxes smaller than 20x20 pixels.
+  - Do NOT detect image borders, shadows, road markings, or background patterns.
+  - If no valid objects are visible, return [].
+  - Stop immediately after listing all valid detections.
+
+  No explanations. No extra text.
+
+
+
+user_prompt: >
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_004
+
+device: cuda

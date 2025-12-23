@@ -1,0 +1,17 @@
+model_id: Qwen/Qwen3-VL-32B-Instruct-FP8
+
+input_file: data/sequences/bike_2.mp4
+
+system_prompt: >
+
+user_prompt: >
+  Given the query "car, person", for each frame, detect and localize the visual content described by the given textual query in JSON format. If the visual content does not exist in a frame, skip that frame. Output Format: [{"frame": 0, "bbox_2d": [x_min, y_min, x_max, y_max], "label": ""}, {"frame": 1, "bbox_2d": [x_min, y_min, x_max, y_max], "label": ""}, ...].
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_023
+
+device: cuda

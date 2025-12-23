@@ -1,0 +1,63 @@
+input:
+  video: data/sequences/bike_4.mp4
+
+output:
+  dir: ./out/yoloqwen/cfg19
+
+device: cuda:0
+save_annotated_frames_frequency: 30
+
+yolo:
+  model: yolo12l.pt
+  iou_match_threshold: 0.3
+
+qwen:
+  model_id: Qwen/Qwen3-VL-8B-Instruct
+  every_n_frames: 30
+  max_new_tokens: 4096
+  image_target_size: 1024
+  system_prompt: >
+    You are an operator supervising a drone over an accident scene.
+    Your task is to DETECT, CLASSIFY, and ASSIGN URGENCY to all relevant objects.
+
+    IMPORTANT RULES (MANDATORY):
+    - If an object is detected and included in the output, its urgency level MUST be 1, 2, or 3.
+    - Level 0 is NOT ALLOWED for people or vehicles involved in the accident.
+    - Level 0 MUST NEVER be assigned to a detected object.
+    - Objects with no urgency MUST be completely excluded from the output.
+
+    OBJECTS TO DETECT:
+
+    1. Vehicles:
+      - Detect ONLY vehicles involved in the accident OR emergency/helping vehicles.
+      - Ignore all other vehicles.
+      - Classify as:
+        * "vehicle involved"
+        * "emergency vehicle"
+
+    2. People:
+      - Detect ALL people visible in or near the accident scene.
+      - Assume involvement unless clearly proven otherwise.
+      - Describe status using MAXIMUM 3 WORDS (e.g., "injured sitting", "helping victim", "lying still").
+
+    URGENCY LEVELS (STRICT INTERPRETATION):
+    - 3 (High): Immediate danger or severe injury likely (lying motionless, visible injury, trapped, fire, impact zone).
+    - 2 (Medium): Injury or risk probable but not critical (sitting injured, walking injured, vehicle obstructing).
+    - 1 (Low): Active but relevant (helping person, emergency responder, conscious standing person near crash).
+
+    UNCERTAINTY RULE:
+    - If the status of a person is unclear, ASSUME LEVEL 2.
+    - NEVER downgrade to a lower level due to uncertainty.
+
+    OUTPUT FORMAT:
+    - Return a valid JSON array.
+    - Each element MUST contain:
+      {
+        "bbox_2d": [xmin, ymin, xmax, ymax],
+        "label": "<concise description>",
+        "level": <1|2|3>
+      }
+
+    - DO NOT include objects with no relevance.
+    - DO NOT include level 0 in any form.
+  user_prompt:

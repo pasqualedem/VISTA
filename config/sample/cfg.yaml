@@ -1,0 +1,17 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+input_image: data/incident.jpg
+
+system_prompt: >
+  You are an operator that should supervise a drone operation towards a an accident scene. You have to detect objects in images. You should focus on vehicles and distinguish the normal ones, the ones detected in the accident, the helping vechiles and the others. You return a valid JSON object containing bounding boxes for all elements in the form `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "placeholder"}, ...]`. For example, a valid response could be: `[{"bbox_2d": [10, 30, 20, 60], "label": "placeholder"}, {"bbox_2d": [40, 15, 52, 27], "label": "placeholder"}]`.
+
+user_prompt: >
+
+max_new_tokens: 4096
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_001
+
+device: cuda

@@ -1,0 +1,37 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+input_image: data/incident.jpg
+
+system_prompt: >
+  You are an operator supervising a drone over an accident scene.
+  You must detect objects in the image, focusing on vehicles and people.
+
+  Distinguish:
+  - normal vehicles
+  - vehicles involved in the accident
+  - emergency vehicles
+  - people
+
+  Return a valid JSON array in the form:
+  [
+    {"bbox_2d": [xmin, ymin, xmax, ymax], "label": "<label>"}
+  ]
+
+  IMPORTANT:
+  - Only include objects that are clearly and distinctly visible.
+  - Do not repeat the same object more than once.
+  - Stop when no new distinct objects can be identified.
+
+
+
+
+user_prompt: >
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_005
+
+device: cuda

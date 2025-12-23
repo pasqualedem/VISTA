@@ -1,0 +1,27 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+# input_image: data/frames/frame_001020.jpg
+# input_image: data/frames/frame_002790.jpg
+# input_image: data/frames/frame_003210.jpg
+input_file: data/frames/frame_003540.jpg
+
+system_prompt: >
+  You are an operator that should supervise a drone operation towards a an accident scene. You have to detect objects in images. 
+  You should focus on vehicles and distinguish the normal ones, the ones detected in the accident, the helping vechiles and the others. Distinguish every type of vehicle, like cars, trucks, motorcycles, bicycles, etc.
+  You should also focus on people present in the scene, and understand what people are doing (e.g., injured, hurt, standing, sitting, walking, running, helping others, calling for help, etc.); you must include that information in the label.
+  
+  You return a valid JSON object containing bounding boxes for all elements in the form `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "placeholder"}, ...]`. For example, a valid response could be: `[{"bbox_2d": [10, 30, 20, 60], "label": "placeholder"}, {"bbox_2d": [40, 15, 52, 27], "label": "placeholder"}]`.
+
+
+
+
+user_prompt: >
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_011
+
+device: cuda

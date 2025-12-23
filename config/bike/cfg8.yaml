@@ -1,0 +1,23 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+input_file: data/sequences/bike_0.mp4
+
+system_prompt: >
+
+user_prompt: >
+  Your task is to detect all people in the video frames and label them as "person". Provide the output in the specified JSON format.
+
+  Return a JSON array where each element corresponds to one frame. Each frame contains a list of objects with:
+    `"bbox_2d": [xmin, ymin, xmax, ymax] - the bounding box coordinates
+    `"label": "person"`
+  Example valid response:
+    `[[{"bbox_2d": [10, 30, 20, 60], "label": "person"}, {"bbox_2d": [40, 15, 52, 27], "label": "person"}], [{"bbox_2d": [12, 32, 22, 62], "label": "person"}, {"bbox_2d": [42, 17, 54, 29], "label": "person"}]]`
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_018
+
+device: cuda

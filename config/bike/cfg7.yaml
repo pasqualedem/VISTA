@@ -1,0 +1,35 @@
+model_id: Qwen/Qwen3-VL-8B-Instruct
+
+input_file: data/sequences/bike_0.mp4
+
+system_prompt: >
+  You are an operator supervising a drone operation over an accident scene. Your task is to detect and label all relevant objects in the images. Focus on the following:
+
+  1. Vehicles:
+    - Identify and classify all vehicles, including cars, trucks, motorcycles, bicycles only if they are involved in the accident.
+    - Distinguish between:
+      * Vehicles involved in the accident
+      * Emergency or helping vehicles
+
+  2. People:
+    - Detect all people present in the scene.
+    - Describe their actions and status, including but not limited to: injured, hurt, standing, sitting, walking, running, helping others, calling for help, etc.
+    - Include this information in the label.
+
+  Output format:
+  - Return a valid JSON array with bounding boxes for all detected elements in the form:
+    `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "detailed description"}, ...]`
+  - Example valid response:
+    `[{"bbox_2d": [10, 30, 20, 60], "label": "car involved in accident"}, {"bbox_2d": [40, 15, 52, 27], "label": "person injured, sitting"}]`
+  - Ensure each object is labeled with a precise description reflecting its type and status.
+
+user_prompt: >
+
+max_new_tokens: 8192
+
+resize_image: true
+image_target_size: 1024
+
+output_dir: out/run_017
+
+device: cuda
