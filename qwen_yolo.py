@@ -42,6 +42,8 @@ def iou(a, b):
 # ============================================================
 
 def draw_tracks(frame, tracks):
+    font_size = 1.0
+    thickness = 2
     for tid, t in tracks.items():
         # Assign a color based on the emergency level
         color_db = {
@@ -50,21 +52,23 @@ def draw_tracks(frame, tracks):
             1: (0, 255, 255),  # Yellow for low emergency
             0: (255, 0, 0),    # Blue for no emergency
         }
-        color = color_db.get(t.get("emergency_level", 0), (255, 0, 0))  # Default to blue if not found
+        # color = color_db.get(t.get("emergency_level", 0), (255, 0, 0))  # Default to blue if not found
         x1, y1, x2, y2 = map(int, t["bbox"])
         label = t.get("label", "unknown")
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+        # color = (255, 0, 0)  # Uniform color for all tracks
+        color = (0, 0, 255) if "person" in label.lower() else (255, 0, 0)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness+1)
         # draw white rectangle background for text
-        (text_w, text_h), _ = cv2.getTextSize(f"{tid}:{label}", cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_size, 1)
         cv2.rectangle(frame, (x1, max(0, y1 - 6 - text_h)), (x1 + text_w, max(0, y1 - 6 + 2)), (0,0,0), -1)
         cv2.putText(
             frame,
-            f"{tid}:{label}",
+            label,
             (x1, max(0, y1 - 6)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
+            font_size,
             (255, 255, 255),
-            1,
+            thickness,
         )
     return frame
 
@@ -139,7 +143,7 @@ def run_pipeline(cfg: dict):
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    fourcc = cv2.VideoWriter_fourcc(*"avc1")  # H.264
+    fourcc = cv2.VideoWriter_fourcc(*"MJPG")
     writer = cv2.VideoWriter(
         str(out_dir / "annotated.mp4"),
         fourcc,
@@ -228,6 +232,8 @@ def run_pipeline(cfg: dict):
             # Match Qwen detections to tracks
             # ----------------------------
             matches = 0
+            join_tracks = {}
+            qwen_only_tracks = {}
             for det in parsed:
                 qb = det["bbox_2d"]
                 label = det.get("label", "unknown")
@@ -247,8 +253,24 @@ def run_pipeline(cfg: dict):
                         "label": label,
                         "emergency_level": urgency_level,
                     }
+                    join_tracks[best_tid] = {
+                        "bbox": active_tracks[best_tid]["bbox"],
+                        "label": label,
+                        "emergency_level": urgency_level,
+                    }
                     matches += 1
+                else:
+                    # Create a new track for Qwen-only detection
+                    new_tid = max(track_db.keys(), default=0) + 1
+                    qwen_only_tracks[new_tid] = {
+                        "bbox": qb,
+                        "label": label,
+                        "emergency_level": urgency_level,
+                    }
+                    track_db[new_tid] = qwen_only_tracks[new_tid]
             log(f"YOLO detected {len(active_tracks)} tracks, Qwen detected {len(parsed)} objects, matched {matches}")
+            
+        merge_method = cfg.get("merge_method", "update")
 
         # ----------------------------
         # Update track DB
@@ -258,6 +280,14 @@ def run_pipeline(cfg: dict):
                 track_db[tid] = tr
             else:
                 track_db[tid]["bbox"] = tr["bbox"]
+                
+        if merge_method == "intersection":
+            # Keep only tracks that were matched with Qwen detections
+            track_db = {tid: tr for tid, tr in track_db.items() if tid in join_tracks}
+        elif merge_method == "union":
+            # Add Qwen-only tracks to track_db
+            for tid, tr in qwen_only_tracks.items():
+                track_db[tid] = tr
 
         annotated = draw_tracks(frame.copy(), track_db)
         if cfg.get("save_annotated_frames_frequency", 0) > 0 and frame_idx % cfg["save_annotated_frames_frequency"] == 0:

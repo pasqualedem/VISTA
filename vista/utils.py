@@ -17,6 +17,8 @@ def set_seed(seed: int):
 
 # Useless categories to ignore with respect to emergency detection
 IGNORE_CATEGORIES = {
+    "dog",
+    "cat"
     "parking meter",
     "bench",
     "backpack",
