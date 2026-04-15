@@ -2,6 +2,7 @@ import base64
 from collections import deque
 from io import BytesIO
 import os
+import subprocess
 import cv2
 import json
 import yaml
@@ -114,6 +115,18 @@ def postprocess_boxes(detections: list, image: Image.Image, model_id: str) -> li
 # Pipeline
 # ============================================================
 
+def _parse_frame(value, fps):
+    """Convert a frame spec to an int frame index.
+    Accepts an int/float (already a frame number) or a 'min:sec' string."""
+    if isinstance(value, str):
+        parts = value.split(":")
+        if len(parts) != 2:
+            raise ValueError(f"Expected 'min:sec' format, got: {value!r}")
+        minutes, seconds = int(parts[0]), float(parts[1])
+        return int((minutes * 60 + seconds) * fps)
+    return int(value)
+
+
 def run_pipeline(cfg: dict):
     video_path = cfg["input"]["video"]
     out_dir = Path(cfg["output"]["dir"])
@@ -124,9 +137,9 @@ def run_pipeline(cfg: dict):
     log("Loading YOLO tracker")
     yolo = YOLO(cfg["yolo"]["model"])
 
-    
+
     load_prediction_dir = cfg["qwen"].get("load_prediction_dir", None)
-    
+
     if load_prediction_dir is not None:
         model = None
         log(f"Loading Qwen predictions from {load_prediction_dir}, skipping Qwen inference")
@@ -140,19 +153,27 @@ def run_pipeline(cfg: dict):
         raise RuntimeError("Cannot open video")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    raw_start = cfg["input"].get("start_frame", 0)
+    raw_end = cfg["input"].get("end_frame", None)
+    start_frame = _parse_frame(raw_start, fps) if raw_start else 0
+    end_frame = _parse_frame(raw_end, fps) if raw_end is not None else None
+    if isinstance(raw_start, str) or isinstance(raw_end, str):
+        log(f"Time-based range: start_frame={start_frame}, end_frame={end_frame} (fps={fps:.2f})")
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+    raw_video_path = str(out_dir / "annotated_raw.mp4")
+    output_video_path = str(out_dir / "annotated.mp4")
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
     writer = cv2.VideoWriter(
-        str(out_dir / "annotated.mp4"),
+        raw_video_path,
         fourcc,
         fps,
         (W, H),
     )
 
     track_db: Dict[int, Dict] = {}
-    frame_idx = 0
 
     stride = cfg["qwen"]["every_n_frames"]
     iou_thr = cfg["yolo"]["iou_match_threshold"]
@@ -162,10 +183,23 @@ def run_pipeline(cfg: dict):
     qwen_history = deque(maxlen=qwen_N)
 
     log("Starting video loop")
+    
+    # Seek to start_frame if specified
+    if start_frame > 0:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        frame_idx = start_frame
+        log(f"Seeking to frame {start_frame}")
+    else:
+        frame_idx = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
+            break
+        
+        # Check if we've reached end_frame
+        if end_frame is not None and frame_idx >= end_frame:
+            log(f"Reached end_frame {end_frame}, stopping processing")
             break
 
         results = yolo.track(frame, persist=True, verbose=False, conf=cfg["yolo"].get("conf", None))[0]
@@ -296,6 +330,24 @@ def run_pipeline(cfg: dict):
             )
         writer.write(annotated)
         frame_idx += 1
+
+    cap.release()
+    writer.release()
+
+    log(f"Converting video to H.264: {output_video_path}")
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", raw_video_path,
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-movflags", "+faststart",
+            output_video_path,
+        ],
+        check=True,
+    )
+    os.remove(raw_video_path)
+    log(f"Video saved to {output_video_path}")
 
 # ============================================================
 # Entry point
