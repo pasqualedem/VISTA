@@ -12,6 +12,7 @@ dependencies = [
     "lovely-tensors>=0.1.20",
     "notebook>=7.5.1",
     "opencv-python>=4.12.0.88",
+    "optuna>=4.8.0",
     "pyvips>=3.1.1",
     "qwen-vl-utils>=0.0.14",
     "sam3>=0.1.3",

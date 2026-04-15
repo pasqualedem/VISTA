@@ -8,91 +8,31 @@ import torch
 from PIL import Image
 from transformers import AutoModelForCausalLM
 
-from ultralytics.data.utils import check_det_dataset
 from ultralytics.engine.model import Model
 from ultralytics.engine.results import Results
-from ultralytics.models.yolo.detect import DetectionValidator
-from ultralytics.utils import TQDM, callbacks as ult_callbacks
-from ultralytics.utils.ops import Profile
-from ultralytics.utils.torch_utils import smart_inference_mode
+from ultralytics.utils import callbacks as ult_callbacks
 
-try:
-    from ultralytics.utils.torch_utils import de_parallel
-except ImportError:
-    from ultralytics.utils.torch_utils import unwrap_model as de_parallel
+from .validator import VISTAValidator
 
 
-class MoonDreamValidator(DetectionValidator):
-    """DetectionValidator adapted for MoonDream's HuggingFace inference API.
+class MoonDreamValidator(VISTAValidator):
+    """VISTAValidator for MoonDream's HuggingFace inference API.
 
-    Reuses all of DetectionValidator's metrics machinery (update_metrics,
-    get_stats, finalize_metrics, print_results). Only the model-loading and
-    inference steps are replaced so that the HuggingFace model is called via
-    its encode_image / detect API instead of a standard YOLO forward pass.
+    Calls ``model.encode_image`` + ``model.detect`` on the letterboxed PIL
+    image converted from the YOLO batch tensor.
     """
 
-    @smart_inference_mode()
-    def __call__(self, trainer=None, model=None):
-        """Run validation, bypassing AutoBackend wrapping."""
-        assert trainer is None, "MoonDreamValidator does not support trainer mode."
-
-        # ---- Setup (mirrors BaseValidator.__call__ non-training path) ----
-        self.training = False
-        self.device = next(iter(model.parameters())).device
-        self.args.half = False
-        self.stride = 32  # required by get_dataloader → build_yolo_dataset
-
-        ult_callbacks.add_integration_callbacks(self)
-
-        self.data = check_det_dataset(self.args.data)
-        self.dataloader = self.dataloader or self.get_dataloader(
-            self.data.get(self.args.split), self.args.batch
-        )
-
-        # ---- Validation loop ----
-        self.run_callbacks("on_val_start")
-        dt = tuple(Profile(device=self.device) for _ in range(4))
-        bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
-        self.init_metrics(de_parallel(model))
-        self.jdict = []
-
-        for batch_i, batch in enumerate(bar):
-            self.run_callbacks("on_val_batch_start")
-            self.batch_i = batch_i
-            with dt[0]:
-                batch = self.preprocess(batch)
-            with dt[1]:
-                preds = self._moondream_infer(model, batch)
-            # dt[2] skipped (no loss computation)
-            with dt[3]:
-                preds = self.postprocess(preds)
-            self.update_metrics(preds, batch)
-            self.run_callbacks("on_val_batch_end")
-
-        stats = {}
-        self.gather_stats()
-        stats = self.get_stats()
-        self.speed = dict(
-            zip(self.speed.keys(), (x.t / len(self.dataloader.dataset) * 1e3 for x in dt))
-        )
-        self.finalize_metrics()
-        self.print_results()
-        self.run_callbacks("on_val_end")
-        return stats
-
-    def _moondream_infer(self, model, batch) -> list[dict[str, torch.Tensor]]:
+    def _infer(self, model, batch) -> list[dict[str, torch.Tensor]]:
         """Run MoonDream on a preprocessed batch.
 
         Args:
-            model: HuggingFace AutoModelForCausalLM with .names attribute.
-            batch: Standard YOLO batch dict. batch["img"] is a float32
-                tensor in [0, 1] of shape (B, 3, H, W).
+            model: HuggingFace AutoModelForCausalLM with ``.names``.
+            batch: YOLO batch dict; ``batch["img"]`` is float32 in [0, 1],
+                shape (B, 3, H, W).
 
         Returns:
-            List of dicts – one per image – in the format expected by
-            DetectionValidator.update_metrics: each dict has keys
-            ``bboxes`` (N, 4), ``conf`` (N,), ``cls`` (N,), ``extra`` (N, 0),
-            all as float32 tensors in the preprocessed image's pixel space.
+            list[dict]: ``bboxes`` (N, 4), ``conf`` (N,), ``cls`` (N,),
+            ``extra`` (N, 0) in letterboxed pixel space.
         """
         imgs = batch["img"]  # (B, 3, H, W), float32, [0, 1]
         _, _, h, w = imgs.shape
@@ -100,7 +40,6 @@ class MoonDreamValidator(DetectionValidator):
 
         batch_preds: list[dict[str, torch.Tensor]] = []
         for img_tensor in imgs:
-            # Convert preprocessed (letterboxed) tensor back to PIL
             img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
             pil_img = Image.fromarray(img_np)
 
@@ -127,10 +66,6 @@ class MoonDreamValidator(DetectionValidator):
 
         return batch_preds
 
-    def postprocess(self, preds):
-        """MoonDream produces final boxes directly – no NMS step needed."""
-        return preds
-
 
 class MoonDream(Model):
     """MoonDream2 open-vocabulary detection model wrapped in the Ultralytics Model interface.
@@ -156,12 +91,6 @@ class MoonDream(Model):
         verbose: bool = False,
         device: str = "cuda",
     ) -> None:
-        """Initialize MoonDream and load the HuggingFace model.
-
-        Bypasses Model.__init__ (which expects a .pt / .yaml file) and
-        populates the same attributes so the rest of the base-class helpers
-        remain usable.
-        """
         torch.nn.Module.__init__(self)
 
         self.callbacks = ult_callbacks.get_default_callbacks()
@@ -187,21 +116,9 @@ class MoonDream(Model):
             device_map={"": device},
         )
 
-    # ------------------------------------------------------------------
-    # task_map – used by Model._smart_load to pick validator / predictor
-    # ------------------------------------------------------------------
-
     @property
     def task_map(self) -> dict[str, dict[str, Any]]:
-        return {
-            "detect": {
-                "validator": MoonDreamValidator,
-            }
-        }
-
-    # ------------------------------------------------------------------
-    # Class vocabulary  (mirrors YOLOWorld / YOLOE API)
-    # ------------------------------------------------------------------
+        return {"detect": {"validator": MoonDreamValidator}}
 
     @property
     def names(self) -> dict[int, str]:
@@ -213,16 +130,8 @@ class MoonDream(Model):
         self._names = value
 
     def set_classes(self, classes: list[str]) -> None:
-        """Set the active detection vocabulary.
-
-        Args:
-            classes (list[str]): Class names to detect, e.g. ``["person", "car"]``.
-        """
+        """Set the active detection vocabulary."""
         self.names = {i: name for i, name in enumerate(classes)}
-
-    # ------------------------------------------------------------------
-    # Inference  →  returns standard Results objects
-    # ------------------------------------------------------------------
 
     def predict(
         self,
@@ -230,15 +139,7 @@ class MoonDream(Model):
         classes: list[str] | None = None,
         **kwargs,
     ) -> list[Results]:
-        """Run MoonDream detection on one or more images.
-
-        Args:
-            source: A single image path / PIL Image, or a list of those.
-            classes: Class names to detect. Falls back to ``self.names``.
-
-        Returns:
-            list[Results]: Standard Ultralytics Results objects.
-        """
+        """Run MoonDream detection on one or more images."""
         names = self._resolve_names(classes)
         images = self._load_images(source)
 
@@ -253,18 +154,14 @@ class MoonDream(Model):
                 detections = self.model.detect(encoded, cls_name.strip())
                 for bbox in detections.get("objects", []):
                     boxes.append([
-                        bbox["x_min"] * w,
-                        bbox["y_min"] * h,
-                        bbox["x_max"] * w,
-                        bbox["y_max"] * h,
-                        1.0,
-                        float(cls_id),
+                        bbox["x_min"] * w, bbox["y_min"] * h,
+                        bbox["x_max"] * w, bbox["y_max"] * h,
+                        1.0, float(cls_id),
                     ])
 
             boxes_t = (
                 torch.tensor(boxes, dtype=torch.float32)
-                if boxes
-                else torch.zeros((0, 6), dtype=torch.float32)
+                if boxes else torch.zeros((0, 6), dtype=torch.float32)
             )
             results.append(Results(orig_np, path="", names=names, boxes=boxes_t))
 
@@ -273,27 +170,10 @@ class MoonDream(Model):
     def __call__(self, source, classes: list[str] | None = None, **kwargs):
         return self.predict(source, classes, **kwargs)
 
-    # ------------------------------------------------------------------
-    # Validation  →  delegates to Model.val() via MoonDreamValidator
-    # ------------------------------------------------------------------
-
     def val(self, **kwargs):
-        """Validate using a YOLO-format dataset.
-
-        Delegates to ``Model.val()`` which instantiates ``MoonDreamValidator``
-        from the task map.  Pass ``data="path/to/dataset.yaml"`` and any
-        other standard ultralytics val kwargs.
-
-        Returns:
-            DetMetrics: Standard Ultralytics detection metrics.
-        """
-        # MoonDreamValidator.init_metrics reads model.names; propagate here.
+        """Validate via MoonDreamValidator. Pass ``data="dataset.yaml"``."""
         self.model.names = self.names
         return super().val(**kwargs)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _resolve_names(self, classes: list[str] | None) -> dict[int, str]:
         if classes is not None:
@@ -305,7 +185,6 @@ class MoonDream(Model):
         )
 
     def _load_images(self, source) -> list[Image.Image]:
-        """Normalise *source* to a list of PIL Images."""
         if isinstance(source, (str, Path)):
             return [Image.open(source).convert("RGB")]
         if isinstance(source, Image.Image):

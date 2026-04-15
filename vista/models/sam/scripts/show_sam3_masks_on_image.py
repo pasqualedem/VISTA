@@ -22,8 +22,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.config import get_images_dir, get_sam3_segmentation_dir  # noqa: E402
-from src.prompts import CLASS_PROMPTS  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.config import get_images_dir, get_sam3_segmentation_dir  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.prompts import CLASS_PROMPTS  # noqa: E402
 
 
 def load_masks_for_image(split: str, image_id: str) -> Dict[int, List[np.ndarray]]:

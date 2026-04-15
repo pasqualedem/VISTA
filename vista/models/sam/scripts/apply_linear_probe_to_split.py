@@ -43,14 +43,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.config import (  # noqa: E402
     get_sam3_yolo_predictions_dir,
     PREDICTIONS_DIR,
     NMS_IOU_DEFAULT,
     NMS_MAX_DET_DEFAULT,
 )
-from src.prompts import CLASS_PROMPTS  # noqa: E402
-from src.yolo_export import YoloBox, nms_yolo_boxes  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.prompts import CLASS_PROMPTS  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.yolo_export import YoloBox, nms_yolo_boxes  # noqa: E402
 
 
 def _sort_key(p: Path):

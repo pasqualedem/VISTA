@@ -26,9 +26,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import get_labels_dir, get_sam3_yolo_predictions_dir  # noqa: E402
-from src.prompts import CLASS_PROMPTS  # noqa: E402
-from src.eval_yolo import (  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.config import get_labels_dir, get_sam3_yolo_predictions_dir  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.prompts import CLASS_PROMPTS  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.eval_yolo import (  # noqa: E402
     _load_yolo_dataset,
     _compute_iou,
 )
@@ -96,7 +96,7 @@ def _load_predictions_with_line_indices(
         Dict mapping class_id -> list of (img_id, line_idx, box_xyxy, score)
         where line_idx is the 0-based index of the line in the .txt file.
     """
-    from src.eval_yolo import _yolo_to_xyxy  # Convert cxcywh -> xyxy
+    from DroneAmbulanceAI.vista.models.sam.src.eval_yolo import _yolo_to_xyxy  # Convert cxcywh -> xyxy
     
     preds_by_class: Dict[int, List[Tuple[str, int, np.ndarray, float]]] = {
         c: [] for c in range(num_classes)

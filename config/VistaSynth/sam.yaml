@@ -1,0 +1,13 @@
+
+grid: SAM
+
+parameters:
+  model:
+    name : [sam]
+
+  val:
+    data: ["data/VistaSynth/data.yaml"]
+    split: ["test"]
+
+other_grids:
+

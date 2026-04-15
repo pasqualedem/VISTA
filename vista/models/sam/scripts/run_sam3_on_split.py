@@ -41,7 +41,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.config import (  # noqa: E402
     get_images_dir,
     get_sam3_yolo_predictions_dir,
     get_sam3_segmentation_dir,
@@ -49,15 +49,15 @@ from src.config import (  # noqa: E402
     NMS_IOU_DEFAULT,
     NMS_MAX_DET_DEFAULT,
 )
-from src.prompts import CLASS_PROMPTS  # noqa: E402
-from src.sam3_wrapper import Sam3ImageModel  # noqa: E402
-from src.yolo_export import (  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.prompts import CLASS_PROMPTS  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.sam3_wrapper import Sam3ImageModel  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.yolo_export import (  # noqa: E402
     sam3_boxes_to_yolo,
     yolo_boxes_to_lines,
     YoloBox,
     nms_yolo_boxes,
 )
-from src.segmentation_export import save_sam3_masks_for_image  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.segmentation_export import save_sam3_masks_for_image  # noqa: E402
 
 
 def _sort_key(p: Path):

@@ -1,0 +1,17 @@
+# This is a comment in the submit file
+# file name : submit_echo
+# universe describes an execution environment. Set universe to vanilla
+universe = vanilla
+
+# Path of the executable (it can be a system command, your own application, a script, etc...)
+executable = .venv/bin/python
+
+# The output of the remote machine running the job will be printed on
+output = grid.out
+error = grid.out
+log = grid.out
+
+request_cpus = 1
+request_memory = 8 GB
+rank = Memory
+queue

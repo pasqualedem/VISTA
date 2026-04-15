@@ -8,77 +8,15 @@ import torch
 from PIL import Image
 from transformers import AutoProcessor, OmDetTurboForObjectDetection
 
-from ultralytics.data.utils import check_det_dataset
 from ultralytics.engine.model import Model
 from ultralytics.engine.results import Results
-from ultralytics.models.yolo.detect import DetectionValidator
-from ultralytics.utils import TQDM, callbacks as ult_callbacks
-from ultralytics.utils.ops import Profile
-from ultralytics.utils.torch_utils import smart_inference_mode
+from ultralytics.utils import callbacks as ult_callbacks
 
-try:
-    from ultralytics.utils.torch_utils import de_parallel
-except ImportError:
-    from ultralytics.utils.torch_utils import unwrap_model as de_parallel
+from .validator import VISTAValidator
 
 
-class OmDetTurboValidator(DetectionValidator):
-    """DetectionValidator adapted for OmDetTurbo's HuggingFace inference API.
-
-    Reuses all of DetectionValidator's metrics machinery. Only the
-    model-loading and inference steps are replaced so that the HuggingFace
-    model is called via its processor + forward pass instead of a standard
-    YOLO forward pass.
-    """
-
-    @smart_inference_mode()
-    def __call__(self, trainer=None, model=None):
-        """Run validation, bypassing AutoBackend wrapping."""
-        assert trainer is None, "OmDetTurboValidator does not support trainer mode."
-
-        # ---- Setup (mirrors BaseValidator.__call__ non-training path) ----
-        self.training = False
-        self.device = next(iter(model.parameters())).device
-        self.args.half = False
-        self.stride = 32  # required by get_dataloader → build_yolo_dataset
-
-        ult_callbacks.add_integration_callbacks(self)
-
-        self.data = check_det_dataset(self.args.data)
-        self.dataloader = self.dataloader or self.get_dataloader(
-            self.data.get(self.args.split), self.args.batch
-        )
-
-        # ---- Validation loop ----
-        self.run_callbacks("on_val_start")
-        dt = tuple(Profile(device=self.device) for _ in range(4))
-        bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
-        self.init_metrics(de_parallel(model))
-        self.jdict = []
-
-        for batch_i, batch in enumerate(bar):
-            self.run_callbacks("on_val_batch_start")
-            self.batch_i = batch_i
-            with dt[0]:
-                batch = self.preprocess(batch)
-            with dt[1]:
-                preds = self._infer(model, batch)
-            # dt[2] skipped (no loss computation)
-            with dt[3]:
-                preds = self.postprocess(preds)
-            self.update_metrics(preds, batch)
-            self.run_callbacks("on_val_batch_end")
-
-        stats = {}
-        self.gather_stats()
-        stats = self.get_stats()
-        self.speed = dict(
-            zip(self.speed.keys(), (x.t / len(self.dataloader.dataset) * 1e3 for x in dt))
-        )
-        self.finalize_metrics()
-        self.print_results()
-        self.run_callbacks("on_val_end")
-        return stats
+class OmDetTurboValidator(VISTAValidator):
+    """VISTAValidator for OmDetTurbo's HuggingFace inference API."""
 
     def _infer(self, model, batch) -> list[dict[str, torch.Tensor]]:
         """Run OmDetTurbo on a preprocessed batch.
@@ -157,9 +95,6 @@ class OmDetTurboValidator(DetectionValidator):
 
         return preds
 
-    def postprocess(self, preds):
-        """OmDetTurbo already applies NMS in post_process; return as-is."""
-        return preds
 
 
 class OmDetTurbo(Model):

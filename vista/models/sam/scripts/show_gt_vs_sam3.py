@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.config import (  # noqa: E402
+from DroneAmbulanceAI.vista.models.sam.src.config import (  # noqa: E402
     get_images_dir,
     get_labels_dir,
     get_sam3_yolo_predictions_dir,
