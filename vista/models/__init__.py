@@ -5,6 +5,7 @@ from .omdetturbo import OmDetTurbo
 from .sam.src.sam3_model import Sam3Model
 from .yoloe import YOLOEVista
 from .yolo import YOLOVista
+from .rtdetr import RTDETRVista
 
 MODEL_ZOO = {
     "moondream": MoonDream,
@@ -12,6 +13,7 @@ MODEL_ZOO = {
     "sam": Sam3Model,
     "yoloe": YOLOEVista,
     "yolo": YOLOVista,
+    "rtdetr": RTDETRVista,
 }
 
 
