@@ -2,14 +2,15 @@ grid: Base
 
 parameters:
   model:
-    - name: "sam"
-    - name: "moondream"
-    - name: "moondream"
-      model_id: vikhyatk/moondream2
+    # - name: "sam"
+    # - name: "moondream"
+    # - name: "moondream"
+    #   model_id: vikhyatk/moondream2
+    # - name: "yoloe"
     - name: "yoloe"
-      model: "checkpoints/YOLOE11_EvaGen.pt"
-    - name: "yoloe"
-    - name: omdetturbo
+      model: "yoloe-26s-seg.pt"
+      # model: "checkpoints/YOLOE11_EvaGen.pt"
+    # - name: omdetturbo
 
   classes: [["crashed_car", "person", "car"]]
 

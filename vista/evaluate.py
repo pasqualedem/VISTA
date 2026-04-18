@@ -44,6 +44,8 @@ def run(parameters, run_name=None, log_params=True, log_on_file=True):
 
     if hasattr(model, "set_classes") and "classes" in parameters:
         model.set_classes(parameters["classes"])
+    if hasattr(model, "fuse"):
+        model.fuse()
 
     if "train" in parameters:
         model.train(save_dir=run_name, **parameters["train"])
