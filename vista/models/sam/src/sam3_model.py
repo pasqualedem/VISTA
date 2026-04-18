@@ -299,6 +299,32 @@ class Sam3Model(Model):
 
         return [Results(orig_np, path=str(img_path), names=names, boxes=boxes_t)]
 
+    def fuse(self, prompt_tuner=None) -> "Sam3Model":
+        """Absorb trained prompt embeddings into the underlying Sam3ImageModel.
+
+        After fusing, ``predict`` and ``val`` use the learned per-class
+        embeddings and score head automatically — no external prompt state is
+        needed and the text encoder is bypassed for feature conditioning.
+
+        Args:
+            prompt_tuner: A trained ``Sam3PromptTuner``.  When ``None``,
+                falls back to ``self.trainer.model`` so you can call this
+                immediately after ``model.train(...)``.
+
+        Returns:
+            ``self`` for chaining.
+        """
+        if prompt_tuner is None:
+            if self.trainer is None or not hasattr(self.trainer, "model"):
+                raise ValueError(
+                    "No prompt_tuner provided and no trainer available. "
+                    "Either pass a Sam3PromptTuner explicitly or call "
+                    "fuse() after train()."
+                )
+            prompt_tuner = self.trainer.model
+        self.model.fuse(prompt_tuner)
+        return self
+
     def __call__(self, source=None, stream=False, **kwargs):
         return self.predict(source, stream, **kwargs)
 

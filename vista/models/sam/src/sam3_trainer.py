@@ -667,6 +667,20 @@ class Sam3Trainer(DetectionTrainer):
 
     # ── public helpers ────────────────────────────────────────────────────────
 
+    def final_eval(self) -> None:
+        """Run final validation using the in-memory Sam3PromptTuner.
+
+        Overrides the base ``final_eval`` which passes a checkpoint *path* to
+        the validator.  ``Sam3TunerValidator`` requires the live model object
+        (to access ``prompt_embeddings`` and ``score_head``), so we skip the
+        disk-reload step and evaluate directly.
+        """
+        LOGGER.info("\nRunning final validation with trained Sam3PromptTuner…")
+        self.validator.args.plots = self.args.plots
+        self.metrics = self.validator(model=self.model)
+        self.metrics.pop("fitness", None)
+        self.run_callbacks("on_fit_epoch_end")
+
     def set_prompts(self, prompts: Dict[int, str]) -> None:
         """Override class prompts before or during training.
 

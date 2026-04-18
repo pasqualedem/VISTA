@@ -8,6 +8,7 @@ parameters:
 
   train:
     data: ["data/VistaSynth/data.yaml"]
+    epochs: [1]
 
   val:
     data: ["data/VistaSynth/data.yaml"]

@@ -150,10 +150,83 @@ class Sam3ImageModel(torch.nn.Module):
             return boxes * scale
         return boxes
 
+    def fuse(self, prompt_tuner: "Sam3PromptTuner") -> "Sam3ImageModel":
+        """Absorb trained prompt embeddings and score head into this model.
+
+        After fusing, ``predict_with_text`` uses the learned per-class
+        embedding (looked up by prompt string) instead of re-encoding text
+        through the SAM3 language encoder.  The text is still forwarded to
+        SAM3's grounding decoder for box/mask generation; only the
+        ``features = pooled + prompt_vec`` conditioning and the confidence
+        re-scoring use the baked-in weights.
+
+        This mirrors the YOLOE pattern: learnable components are collapsed
+        into static buffers so that inference needs no external embedding
+        state and no active gradient context.
+
+        Args:
+            prompt_tuner: Trained ``Sam3PromptTuner``.  Its
+                ``prompt_embeddings.weight`` and ``score_head`` are deep-copied
+                and stored as frozen attributes.
+
+        Returns:
+            ``self`` for chaining.
+        """
+        import copy as _copy
+
+        # ── bake embeddings as a frozen buffer ────────────────────────────────
+        weight = prompt_tuner.prompt_embeddings.weight.detach().clone()
+        # Register as a proper nn.Module buffer so it moves with .to(device)
+        # and is included in state_dict().
+        self.register_buffer("_fused_embeddings", weight)  # (nc, embed_dim)
+
+        # ── bake score head ───────────────────────────────────────────────────
+        self._fused_score_head = _copy.deepcopy(prompt_tuner.score_head)
+        for p in self._fused_score_head.parameters():
+            p.requires_grad_(False)
+
+        # ── reverse lookup: text prompt → class id ────────────────────────────
+        self._fused_prompt_to_cls: dict[str, int] = {
+            text: cls_id for cls_id, text in prompt_tuner.prompts.items()
+        }
+
+        self._is_fused: bool = True
+
+        from ultralytics.utils import LOGGER as _LOGGER
+        _LOGGER.info(
+            f"Sam3ImageModel fused: {len(self._fused_prompt_to_cls)} class "
+            "embeddings absorbed — text encoder bypassed for feature conditioning."
+        )
+        return self
+
     def predict_with_text(self, image_path: PathLike, prompt: str) -> Sam3Prediction:
+        """Run SAM 3 on a single image using a text prompt.
+
+        When the model has been fused via ``fuse()``, the learned per-class
+        embedding is used for feature conditioning and confidence re-scoring
+        instead of the text encoder output.  Box/mask generation always uses
+        the text grounding path.
         """
-        Run SAM 3 on a single image using a single text prompt.
-        """
+        if getattr(self, "_is_fused", False) and prompt in self._fused_prompt_to_cls:
+            cls_id  = self._fused_prompt_to_cls[prompt]
+            emb_vec = self._fused_embeddings[cls_id]  # (embed_dim,)
+            pred    = self.predict_with_prompt_override(
+                image_path, prompt, prompt_vec_override=emb_vec
+            )
+            # Re-score proposals with the baked-in score head
+            if pred.features.shape[0] > 0:
+                dev    = pred.features.device
+                scores = torch.sigmoid(
+                    self._fused_score_head.to(dev)(pred.features)
+                ).squeeze(-1)
+                pred = Sam3Prediction(
+                    masks=pred.masks,
+                    boxes=pred.boxes,
+                    scores=scores,
+                    features=pred.features,
+                )
+            return pred
+
         return self.predict_with_prompt_override(image_path, prompt, prompt_vec_override=None)
 
     def predict_with_prompt_override(
