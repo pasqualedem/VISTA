@@ -4,7 +4,7 @@ from transformers import AutoProcessor
 from vllm import SamplingParams
 import os
 
-os.environ["HF_HOME"] = "/media/nvme/pasquale/HF"
+os.environ["HF_HOME"] = "$SCRATCH"
 
 max_seq_length = 16384  # Must be this long for VLMs
 

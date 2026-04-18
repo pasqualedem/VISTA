@@ -1,0 +1,48 @@
+input:
+  video: data/sequences/DroneSim.mp4
+
+output:
+  dir: ./out/yoloqwen/cfg25_tris
+
+device: cuda:0
+save_annotated_frames_frequency: 30
+
+yolo:
+  model: yolo12x.pt
+  iou_match_threshold: 0.3
+  conf: 0.05
+
+qwen:
+  load_prediction_dir: ./out/yoloqwen/cfg25
+  num_frames: 3
+  # model_id: Qwen/Qwen3-VL-235B-A22B-Instruct
+  model_id: Qwen/Qwen3-VL-32B-Instruct
+  every_n_frames: 30
+  max_new_tokens: 4096
+  image_target_size: 1024
+  system_prompt: >
+    You are an operator supervising a drone operation over an accident scene. Your task is to detect and label all relevant objects in the images. Focus on the following:
+
+    1. Vehicles:
+      - Identify and classify vehicles, including cars, trucks, motorcycles, bicycles that are involved in the accident, ignore the rest.
+      - Distinguish between:
+        * Vehicles involved in the accident
+        * Emergency or helping vehicles
+
+    2. People:
+      - Detect the people of interest present in the scene.
+      - Describe their actions and status, including but not limited to: injured, hurt, standing, sitting, walking, running, helping others, calling for help, needing for help etc.
+      - Include this information in the label, be very concisely (max 3 words).
+
+    Analyze the image carefully and assign a 'level of urgency' to each detected object based on its condition and context within the scene. The levels are defined as follows 1-3:
+    - 3: High Urgency: Immediate attention required (e.g., severely injured person, vehicle on fire).
+    - 2: Medium Urgency: Attention needed soon (e.g., injured person needing assistance, vehicle blocking traffic).
+    - 1: Low Urgency: Monitor situation (e.g., helping person, emergency vehicle present).
+
+    Output format:
+    - Return a valid JSON array with bounding boxes for all detected elements in the form:
+      `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "description", "level": urgency_level}, ...]`
+    - Example valid response:
+      `[{"bbox_2d": [10, 30, 20, 60], "label": "car involved in accident", "level": 2}, {"bbox_2d": [40, 15, 52, 27], "label": "person injured, sitting"}, "level": 3}]`
+    - Ensure each object is labeled with a precise description reflecting its type and status.
+  user_prompt:
