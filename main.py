@@ -105,7 +105,12 @@ def manage_multiprocess_run(run_parameters, run_name, logger, job_parallelism=No
     default="slurm",
     help="Scheduler to use, either 'slurm' or 'condor'",
 )
-def grid(parameters, parallel, only_create=False, function="evaluate", job_parallelism=None, scheduler="slurm"):
+@click.option(
+    "--out_folder",
+    default=OUT_FOLDER,
+    help="Folder where the grid results will be saved",
+)
+def grid(parameters, parallel, only_create=False, function="evaluate", job_parallelism=None, scheduler="slurm", out_folder=OUT_FOLDER):
     assert function in FUNCTIONS, f"Function {function} not recognized, available functions: {list(FUNCTIONS.keys())}"
     
     run_function = FUNCTIONS[function]
@@ -117,7 +122,7 @@ def grid(parameters, parallel, only_create=False, function="evaluate", job_paral
     grid_name = parameters["grid"]
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     grid_name = f"{current_time}_{grid_name}"
-    log_folder = os.path.join(OUT_FOLDER, grid_name)
+    log_folder = os.path.join(out_folder, grid_name)
     
     runs_parameters = create_experiment(parameters)
     

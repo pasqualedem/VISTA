@@ -8,6 +8,7 @@ parameters:
       model_id: vikhyatk/moondream2
     - name: "yoloe"
       model: "checkpoints/YOLOE11_EvaGen.pt"
+    - name: "yoloe"
     - name: omdetturbo
 
   classes: [["crashed_car", "person", "car"]]

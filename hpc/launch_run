@@ -15,4 +15,4 @@
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=pasquale.demarinis@uniba.it
 
-srun ./slurm/launch_run_exe $@
+srun ./hpc/launch_run_exe $@

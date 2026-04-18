@@ -14,6 +14,12 @@ parameters:
       model: "yolo12m"
     - name: "yolo"
       model: "yolo12x"
+    - name: "yolo"
+      model: "yolo11n"
+    - name: "yolo"
+      model: "yolo11m"
+    - name: "yolo"
+      model: "yolo11x"
 
 
   classes: [["crashed_car", "person", "car"]]
