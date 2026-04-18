@@ -2,7 +2,7 @@ input:
   video: data/sequences/DroneSim.mp4
 
 output:
-  dir: ./out/yoloqwen/cfg29
+  dir: ./out/yoloqwen/cfg30
 
 device: cuda:0
 save_annotated_frames_frequency: 30
@@ -13,7 +13,7 @@ yolo:
   conf: 0.05
 
 qwen:
-  num_frames: 0
+  num_frames: 5
   # model_id: Qwen/Qwen3-VL-235B-A22B-Instruct
   model_id: Qwen/Qwen3-VL-32B-Instruct
   every_n_frames: 30
@@ -37,6 +37,8 @@ qwen:
     - 3: High Urgency: Immediate attention required (e.g., severely injured person, vehicle on fire).
     - 2: Medium Urgency: Attention needed soon (e.g., injured person needing assistance, vehicle blocking traffic).
     - 1: Low Urgency: Monitor situation (e.g., helping person, emergency vehicle present).
+
+    Carefully review each frame given by the user, do not re-use locations from previous frames, as the drone might have moved.
 
     Output format:
     - Return a valid JSON array with bounding boxes for all detected elements in the form:

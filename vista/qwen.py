@@ -5,6 +5,7 @@ from transformers import (
     Qwen2_5_VLForConditionalGeneration,
     Qwen2VLForConditionalGeneration,
     Qwen3VLForConditionalGeneration,
+    Qwen3VLMoeForConditionalGeneration
 )
 from qwen_vl_utils import process_vision_info
 from vllm import LLM, SamplingParams
@@ -118,7 +119,8 @@ class QwenVLHF(QwenVLforObjectDetection):
             return_tensors="pt",
             video_metadata=video_metadatas,
             **video_kwargs,
-        ).to(self.device)
+        )
+        # .to(self.device)
 
         log("Inputs tokenized and moved to device")
 
@@ -195,6 +197,8 @@ class AutoModelQwenVL:
             loader = Qwen2VLForConditionalGeneration
         elif model_id.startswith("Qwen/Qwen2.5-VL"):
             loader = Qwen2_5_VLForConditionalGeneration
+        elif model_id.startswith("Qwen/Qwen3-VL-235B"):
+            loader = Qwen3VLMoeForConditionalGeneration
         elif model_id.startswith("Qwen/Qwen3-VL"):
             loader = Qwen3VLForConditionalGeneration
         else:
@@ -202,7 +206,7 @@ class AutoModelQwenVL:
 
         return loader.from_pretrained(
             model_id,
-            device_map=None,
+            device_map="auto",
             torch_dtype="auto",
         )
 
@@ -240,10 +244,11 @@ def get_model(cfg):
         model_id.startswith("Qwen/Qwen3-VL")
         or model_id.startswith("Qwen/Qwen2.5-VL")
         or model_id.startswith("Qwen/Qwen2-VL")
+        or model_id.startswith("Qwen/Qwen3-VL-235B")
     ):
         model = AutoModelQwenVL.from_pretrained(model_id)
-        processor = AutoProcessor.from_pretrained(cfg["qwen"]["model_id"])
-        model.to(device).eval()
+        processor = AutoProcessor.from_pretrained(cfg["qwen"]["model_id"], device_map="auto")
+        model.eval()
         return QwenVLHF(
             model=model,
             processor=processor,

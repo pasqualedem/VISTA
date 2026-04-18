@@ -2,18 +2,18 @@ input:
   video: data/sequences/DroneSim.mp4
 
 output:
-  dir: ./out/yoloqwen/cfg29
+  dir: ./out/yoloqwen/cfg26
 
 device: cuda:0
 save_annotated_frames_frequency: 30
 
 yolo:
-  model: yolo12x.pt
+  model: yolo12l.pt
   iou_match_threshold: 0.3
   conf: 0.05
 
 qwen:
-  num_frames: 0
+  num_frames: 1
   # model_id: Qwen/Qwen3-VL-235B-A22B-Instruct
   model_id: Qwen/Qwen3-VL-32B-Instruct
   every_n_frames: 30
