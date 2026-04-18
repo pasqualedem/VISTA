@@ -5,7 +5,7 @@ import click
 import yaml
 
 
-from vista.evaluate import evaluate
+from vista.evaluate import run
 from vista.stats import analyze_yolo_dataset, ALL_SECTIONS
 from vista.utils.logger import get_logger
 from vista.utils.utils import load_yaml
@@ -16,7 +16,9 @@ from vista.utils.run import ParallelRun
 OUT_FOLDER = "out"
 
 FUNCTIONS = {
-    "evaluate": evaluate,
+    "evaluate": run,
+    "train": run,  # for now, train and evaluate are the same function, but they could be different in the future
+    "run": run,  # alias for evaluate
 }
 FUNCTION_SLURMS = {
     "evaluate": "hpc/launch_run",

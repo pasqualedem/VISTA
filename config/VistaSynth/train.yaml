@@ -1,0 +1,29 @@
+grid: Train
+
+parameters:
+  model:
+    - name: "yolo"
+      model: "yolo26n"
+    - name: "yolo"
+      model: "yolo26m"
+    - name: "yolo"
+      model: "yolo26x"
+    - name: "yolo"
+      model: "yolo12n"
+    - name: "yolo"
+      model: "yolo12m"
+    - name: "yolo"
+      model: "yolo12x"
+
+
+  classes: [["crashed_car", "person", "car"]]
+
+  train:
+    data: ["data/VistaSynth/data.yaml"]
+
+  val:
+    data: ["data/VistaSynth/data.yaml"]
+    split: ["test"]
+
+other_grids:
+

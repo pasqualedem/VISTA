@@ -340,6 +340,7 @@ class VISTAValidator(VISTAOutputMixin, DetectionValidator):
                 pixel space so they align with the GT boxes produced by
                 ``DetectionValidator._prepare_batch``.
         """
+        return model(batch["img"])
 
     # ── postprocess hook (override if NMS is not needed) ─────────────────────
 
