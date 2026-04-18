@@ -1,0 +1,17 @@
+grid: TrainSAM3
+
+parameters:
+  model:
+    - name: "sam"
+
+  classes: [["crashed_car", "person", "car"]]
+
+  train:
+    data: ["data/VistaSynth/data.yaml"]
+
+  val:
+    data: ["data/VistaSynth/data.yaml"]
+    split: ["test"]
+
+other_grids:
+

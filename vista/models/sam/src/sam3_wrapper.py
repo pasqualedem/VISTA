@@ -33,7 +33,7 @@ class Sam3Prediction:
     features: Any   # per-box semantic features (N, 256)
 
 
-class Sam3ImageModel:
+class Sam3ImageModel(torch.nn.Module):
     """Wrapper for single-image inference with a text prompt."""
 
     def __init__(self, checkpoint_path: Optional[str] = None) -> None:
@@ -41,6 +41,8 @@ class Sam3ImageModel:
         # Explicitly load from HuggingFace to avoid bpe_path issues
         # NOTE: We also pass bpe_path explicitly to be robust in Colab/runtime environments.
         import sam3  # local import to avoid issues before dependencies are ready
+        
+        super().__init__()
 
         bpe_path = str(Path("assets") / "bpe_simple_vocab_16e6.txt.gz")
         if not os.path.exists(bpe_path):
@@ -152,6 +154,39 @@ class Sam3ImageModel:
         """
         Run SAM 3 on a single image using a single text prompt.
         """
+        return self.predict_with_prompt_override(image_path, prompt, prompt_vec_override=None)
+
+    def predict_with_prompt_override(
+        self,
+        image_path: PathLike,
+        prompt: str,
+        prompt_vec_override: Optional[torch.Tensor] = None,
+    ) -> Sam3Prediction:
+        """Run SAM 3 on a single image, optionally overriding the prompt vector.
+
+        Identical to ``predict_with_text`` except that when *prompt_vec_override*
+        is provided it replaces the text-derived ``_prompt_vector`` in the
+        ``features = pooled + prompt_vec`` step.  This allows callers to inject a
+        learnable embedding (with an active gradient) while keeping the SAM3
+        backbone frozen under ``torch.no_grad()``.
+
+        If *prompt_vec_override* is ``None`` the behaviour is identical to
+        ``predict_with_text``.  Pass ``torch.zeros(embed_dim)`` to obtain the raw
+        ROI-pooled features without any prompt conditioning.
+
+        Args:
+            image_path: Path to the input image.
+            prompt: Text prompt forwarded to the SAM3 text encoder (used for
+                box/mask generation regardless of *prompt_vec_override*).
+            prompt_vec_override: Optional 1-D tensor of shape ``(embed_dim,)``
+                substituted for the text-derived prompt vector.  When provided,
+                gradients flow through this tensor.
+
+        Returns:
+            ``Sam3Prediction`` with ``features`` computed as
+            ``pooled + prompt_vec_override`` (or ``pooled + text_vec`` when
+            *prompt_vec_override* is ``None``).
+        """
         image_path = Path(image_path)
         image = Image.open(image_path).convert("RGB")
 
@@ -228,8 +263,12 @@ class Sam3ImageModel:
             aligned=True,
         ).flatten(1)
 
-        # Prompt conditioning: add mean-pooled language embedding (256-d) to each ROI feature
-        prompt_vec = self._prompt_vector(backbone_out, device=pooled.device, dtype=pooled.dtype)
+        # Prompt conditioning: use override if provided, else derive from language_embeds.
+        if prompt_vec_override is not None:
+            prompt_vec = prompt_vec_override.to(device=pooled.device, dtype=pooled.dtype)
+        else:
+            prompt_vec = self._prompt_vector(backbone_out, device=pooled.device, dtype=pooled.dtype)
+
         if pooled.shape[1] != prompt_vec.shape[0]:
             # If C != 256, we can't keep 256-d features. Fail loudly (avoids silent bugs).
             raise RuntimeError(

@@ -189,7 +189,7 @@ class Sam3Model(Model):
         self.ckpt = {}
         self.cfg = None
         self.ckpt_path = str(checkpoint_path) if checkpoint_path else None
-        self.overrides = {"task": "detect"}
+        self.overrides = {"task": "detect", "model": "sam3"}
         self.metrics = None
         self.session = None
         self.task = "detect"
@@ -201,7 +201,8 @@ class Sam3Model(Model):
 
     @property
     def task_map(self) -> dict:
-        return {"detect": {"validator": Sam3Validator}}
+        from .sam3_trainer import Sam3Trainer, Sam3TunerValidator
+        return {"detect": {"validator": Sam3Validator, "trainer": Sam3Trainer}}
 
     # ── class vocabulary ──────────────────────────────────────────────────────
 
@@ -300,6 +301,36 @@ class Sam3Model(Model):
 
     def __call__(self, source=None, stream=False, **kwargs):
         return self.predict(source, stream, **kwargs)
+
+    # ── train ─────────────────────────────────────────────────────────────────
+
+    def train(self, **kwargs) -> Any:
+        """Fine-tune SAM3 prompt embeddings using Sam3Trainer.
+
+        Bypasses ``Model.train()`` which expects a YOLO ``.pt`` structure
+        (``model.yaml``, ``model.ckpt``, …) incompatible with Sam3ImageModel.
+
+        Pass the same kwargs you would to ``DetectionTrainer``, e.g.::
+
+            model.train(data="data/VistaSynth/data.yaml", epochs=30, batch=4)
+
+        Returns:
+            dict: Final validation metrics produced by the trainer.
+        """
+        from .sam3_trainer import Sam3Trainer
+
+        overrides = {**self.overrides, **kwargs}
+        # Forward prompts to the trainer if they were set via set_classes()
+        if self._prompts:
+            overrides.setdefault("sam3_prompts", self._prompts)
+
+        self.trainer = Sam3Trainer(overrides=overrides, _callbacks=self.callbacks)
+        self.trainer.train()
+
+        from ultralytics.utils import RANK
+        if RANK in {-1, 0}:
+            self.metrics = self.trainer.metrics
+        return getattr(self, "metrics", {})
 
     # ── val ───────────────────────────────────────────────────────────────────
 
