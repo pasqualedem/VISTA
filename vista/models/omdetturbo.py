@@ -125,6 +125,7 @@ class OmDetTurbo(Model):
         task: str = "detect",
         verbose: bool = False,
         device: str = "cuda",
+        names: list[str] | None = None,
     ) -> None:
         """Initialize OmDetTurbo and load the HuggingFace model + processor.
 
@@ -162,6 +163,9 @@ class OmDetTurbo(Model):
                         buf_name, torch.zeros(buf.shape, dtype=buf.dtype, device="cpu")
                     )
         self.model = hf_model.to(device)
+        
+        if names is not None:
+            self.set_classes(names)
 
     # ------------------------------------------------------------------
     # task_map – used by Model._smart_load to pick validator

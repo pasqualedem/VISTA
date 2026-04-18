@@ -1,0 +1,20 @@
+grid: Base
+
+parameters:
+  model:
+    - name: "sam"
+    - name: "moondream"
+    - name: "moondream"
+      model_id: vikhyatk/moondream2
+    - name: "yoloe"
+      model: "checkpoints/YOLOE11_EvaGen.pt"
+    - name: omdetturbo
+
+  classes: [["crashed_car", "person", "car"]]
+
+  val:
+    data: ["data/VistaSynth/data.yaml"]
+    split: ["test"]
+
+other_grids:
+

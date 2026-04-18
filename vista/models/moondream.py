@@ -90,6 +90,7 @@ class MoonDream(Model):
         task: str = "detect",
         verbose: bool = False,
         device: str = "cuda",
+        names: list[str] | None = None,
     ) -> None:
         torch.nn.Module.__init__(self)
 
@@ -115,6 +116,9 @@ class MoonDream(Model):
             trust_remote_code=True,
             device_map={"": device},
         )
+        
+        if names is not None:
+            self.set_classes(names)
 
     @property
     def task_map(self) -> dict[str, dict[str, Any]]:

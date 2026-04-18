@@ -6,6 +6,7 @@ import yaml
 
 
 from vista.evaluate import evaluate
+from vista.stats import analyze_yolo_dataset, ALL_SECTIONS
 from vista.utils.logger import get_logger
 from vista.utils.utils import load_yaml
 from vista.utils.grid import create_experiment
@@ -212,6 +213,77 @@ def run(
         not disable_log_params,
         not disable_log_on_file,
     )
+
+@cli.command("stats")
+@click.argument("yaml_path")
+@click.option("--output_dir", "-o", default="dataset_stats", show_default=True,
+              help="Directory where plots and reports are saved.")
+@click.option("--splits", default="train,val,test", show_default=True,
+              help="Comma-separated list of splits to analyse.")
+@click.option("--sections", default=None,
+              help=(
+                  "Comma-separated list of sections to run.  Omit to run all.  "
+                  f"Available: {','.join(ALL_SECTIONS)}"
+              ))
+@click.option("--read_image_sizes", is_flag=True, default=False,
+              help="Open every image to read pixel dimensions (slow; requires Pillow).")
+@click.option("--no_json", is_flag=True, default=False, help="Skip saving stats.json.")
+@click.option("--no_csv",  is_flag=True, default=False, help="Skip saving annotations.csv.")
+@click.option("--figsize", default="10,6", show_default=True,
+              help="Figure size as 'width,height' in inches.")
+@click.option("--dpi", default=150, show_default=True, help="DPI for SVG rasterisation.")
+@click.option("--style", default="seaborn-v0_8-whitegrid", show_default=True,
+              help="Matplotlib style name.")
+@click.option("--heatmap_bins", default=64, show_default=True,
+              help="Grid resolution for spatial heatmaps.")
+@click.option("--heatmap_cmap", default="hot", show_default=True,
+              help="Matplotlib colourmap for heatmaps.")
+@click.option("--hist_bins", default=40, show_default=True,
+              help="Number of bins for histogram plots.")
+@click.option("--bar_orientation", default="horizontal", show_default=True,
+              type=click.Choice(["horizontal", "vertical"]),
+              help="Orientation for bar charts.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress progress output.")
+def stats(
+    yaml_path,
+    output_dir,
+    splits,
+    sections,
+    read_image_sizes,
+    no_json,
+    no_csv,
+    figsize,
+    dpi,
+    style,
+    heatmap_bins,
+    heatmap_cmap,
+    hist_bins,
+    bar_orientation,
+    quiet,
+):
+    """Compute and save dataset statistics for a YOLO-format dataset YAML."""
+    splits_list   = [s.strip() for s in splits.split(",") if s.strip()]
+    sections_list = [s.strip() for s in sections.split(",") if s.strip()] if sections else None
+    fw, fh = (float(v) for v in figsize.split(","))
+
+    analyze_yolo_dataset(
+        yaml_path=yaml_path,
+        output_dir=output_dir,
+        splits=splits_list,
+        sections=sections_list,
+        read_image_sizes=read_image_sizes,
+        save_json=not no_json,
+        save_csv=not no_csv,
+        verbose=not quiet,
+        figsize=(fw, fh),
+        dpi=dpi,
+        style=style,
+        heatmap_bins=heatmap_bins,
+        heatmap_cmap=heatmap_cmap,
+        hist_bins=hist_bins,
+        bar_orientation=bar_orientation,
+    )
+
 
 if __name__ == "__main__":
     cli()

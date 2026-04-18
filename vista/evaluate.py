@@ -43,6 +43,9 @@ def evaluate(parameters, run_name=None, log_params=True, log_on_file=True):
     model_parameters = parameters["model"]
     model = get_model(model_parameters)
     
+    if hasattr(model, "set_classes") and "classes" in parameters:
+        model.set_classes(parameters["classes"])
+    
     val_params = parameters.get("val", {})
     
     model.val(save_dir=run_name, **val_params)

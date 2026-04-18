@@ -1,10 +1,10 @@
 from ultralytics import YOLOE
-# path = "checkpoints/YOLOE11_EvaGen.pt"
-# model = YOLOE(path)
-# model.fuse()
+path = "checkpoints/YOLOE11_EvaGen.pt"
+model = YOLOE(path)
+model.fuse()
 
-from DroneAmbulanceAI.vista.models.sam.src.sam3_model import Sam3Model
-model = Sam3Model()
+# from DroneAmbulanceAI.vista.models.sam.src.sam3_model import Sam3Model
+# model = Sam3Model()
 
 # from vista.moondream import MoonDream
 # from ultralytics import YOLO

@@ -1,11 +1,15 @@
+from ultralytics import YOLOE
+
 from .moondream import MoonDream
 from .omdetturbo import OmDetTurbo
 from .sam.src.sam3_model import Sam3Model
+from .yoloe import YOLOEVista
 
 MODEL_ZOO = {
     "moondream": MoonDream,
     "omdetturbo": OmDetTurbo,
     "sam": Sam3Model,
+    "yoloe": YOLOEVista,
 }
 
 
