@@ -1,10 +1,10 @@
 from ultralytics import RTDETR
-from ultralytics.models.yolo.detect import DetectionValidator
+from ultralytics.models.rtdetr.val import RTDETRValidator as _RTDETRValidator
 
 from vista.models.validator import VISTAOutputMixin
 
 
-class RTDETRValidator(VISTAOutputMixin, DetectionValidator):
+class RTDETRValidator(VISTAOutputMixin, _RTDETRValidator):
     """RTDETRDetectValidator that also writes VISTA structured JSON/CSV outputs."""
 
 
