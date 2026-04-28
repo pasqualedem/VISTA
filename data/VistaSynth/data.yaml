@@ -1,6 +1,0 @@
-nc: 3
-names: ["crashed car","person", "car"]
-
-train: images/train
-val: images/val
-test: images/test

@@ -27,10 +27,10 @@ parameters:
   classes: [["crashed_car", "person", "car"]]
 
   train:
-    data: ["data/VistaSynth/data.yaml"]
+    data: ["data/VistaCrash/data.yaml"]
 
   val:
-    data: ["data/VistaSynth/data.yaml"]
+    data: ["data/VistaCrash/data.yaml"]
     split: ["test"]
 
 other_grids:
