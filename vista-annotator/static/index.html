@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VISTA Annotator</title>
+<style>
+  :root { --bg:#14161a; --panel:#1d2026; --panel2:#23262e; --fg:#dfe3ea; --dim:#8a93a3;
+          --accent:#4da3ff; --orig:#31c8d8; --manual:#5ee05e; --sam:#ff9f43; --edited:#ffd94d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; height:100vh;
+         display:flex; overflow:hidden; }
+  #sidebar { width:240px; min-width:240px; background:var(--panel); padding:10px;
+             overflow-y:auto; border-right:1px solid #000; }
+  #sidebar h1 { font-size:15px; margin:2px 0 10px; color:var(--accent);}
+  .vid { padding:7px 8px; border-radius:6px; cursor:pointer; margin-bottom:4px;
+         background:var(--panel2); border:1px solid transparent; }
+  .vid:hover { border-color:var(--accent); }
+  .vid.active { border-color:var(--accent); background:#2a3340; }
+  .vid .name { font-weight:600; font-size:12px; word-break:break-all;}
+  .vid .sub { color:var(--dim); font-size:11px; }
+  .badge { display:inline-block; padding:0 5px; border-radius:8px; font-size:10px;
+           background:#345; color:#9cf; margin-left:4px;}
+  .badge.no { background:#533; color:#f99; }
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #viewerWrap { flex:1; position:relative; min-height:0; background:#0b0c0f; }
+  #viewer { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; }
+  #hud { position:absolute; top:8px; left:10px; background:rgba(10,12,16,.75);
+         padding:4px 10px; border-radius:6px; font-size:12px; pointer-events:none; }
+  #bottom { background:var(--panel); border-top:1px solid #000; padding:8px 12px; }
+  #timeline { width:100%; height:46px; display:block; cursor:pointer; border-radius:4px; }
+  #controls { display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap;}
+  button { background:var(--panel2); color:var(--fg); border:1px solid #383d47;
+           border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:#1e4a7a; border-color:var(--accent); }
+  button.danger { background:#5a2323; border-color:#a55; }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=number], select { background:var(--panel2); color:var(--fg);
+     border:1px solid #383d47; border-radius:5px; padding:3px 6px; font-size:12px;}
+  input[type=number] { width:80px; }
+  #right { width:295px; min-width:295px; background:var(--panel); border-left:1px solid #000;
+           padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;}
+  .card { background:var(--panel2); border-radius:8px; padding:9px; }
+  .card h2 { font-size:12px; margin:0 0 7px; color:var(--accent); text-transform:uppercase;
+             letter-spacing:.5px;}
+  .annRow { display:flex; align-items:center; gap:5px; padding:3px 4px; border-radius:4px;
+            cursor:pointer; font-size:12px;}
+  .annRow:hover { background:#2a2e37; }
+  .annRow.sel { background:#31415a; }
+  .dot { width:9px; height:9px; border-radius:2px; flex:none; }
+  .annRow .cat { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .annRow .src { color:var(--dim); font-size:10px; }
+  .annRow .del { color:#f77; padding:0 4px; visibility:hidden; }
+  .annRow:hover .del { visibility:visible; }
+  progress { width:100%; height:10px; }
+  #jobMsg { font-size:11px; color:var(--dim); word-break:break-word; }
+  .row { display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
+  .row label { color:var(--dim); font-size:11px; }
+  #legend span { display:inline-flex; align-items:center; gap:4px; margin-right:9px;
+                 font-size:11px; color:var(--dim); }
+  .kbd { background:#2c313b; border-radius:3px; padding:0 4px; font-size:10px;
+         font-family:monospace; }
+  #toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+           background:#2b3b55; padding:8px 18px; border-radius:8px; display:none;
+           z-index:99; box-shadow:0 4px 18px #000a; }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h1>VISTA Annotator</h1>
+  <div id="videoList">loading…</div>
+</div>
+
+<div id="main">
+  <div id="viewerWrap">
+    <canvas id="viewer"></canvas>
+    <div id="hud"></div>
+  </div>
+  <div id="bottom">
+    <canvas id="timeline"></canvas>
+    <div id="controls">
+      <button id="btnPlay" title="space">▶</button>
+      <button data-step="-30" title="Ctrl+←">−30</button>
+      <button data-step="-10" title="Shift+←">−10</button>
+      <button data-step="-1" title="←">−1</button>
+      <input type="number" id="frameInput" min="0" value="0">
+      <button data-step="1" title="→">+1</button>
+      <button data-step="10" title="Shift+→">+10</button>
+      <button data-step="30" title="Ctrl+→">+30</button>
+      <select id="speed"><option value="2">2 fps</option><option value="5">5</option>
+        <option value="10" selected>10</option><option value="15">15</option>
+        <option value="30">30 fps</option></select>
+      <button id="btnGap">next gap ⇥</button>
+      <span id="legend">
+        <span><i class="dot" style="background:var(--orig);display:inline-block"></i>original</span>
+        <span><i class="dot" style="background:var(--manual);display:inline-block"></i>manual</span>
+        <span><i class="dot" style="background:var(--sam);display:inline-block"></i>SAM3</span>
+        <span><i class="dot" style="background:var(--edited);display:inline-block"></i>edited</span>
+      </span>
+      <span style="flex:1"></span>
+      <span style="color:var(--dim);font-size:11px">
+        <span class="kbd">N</span> new box <span class="kbd">Del</span> delete
+        <span class="kbd">Esc</span> deselect · drag box/handles to edit · wheel = zoom</span>
+    </div>
+  </div>
+</div>
+
+<div id="right">
+  <div class="card">
+    <h2>Frame annotations <span id="annCount"></span></h2>
+    <div id="annList" style="max-height:180px;overflow-y:auto"></div>
+    <div class="row" style="margin-top:7px">
+      <button id="btnNewBox">✚ new box (N)</button>
+      <select id="newCat" style="max-width:150px"></select>
+    </div>
+    <div class="row" id="newCapRow">
+      <label>caption</label>
+      <select id="newCap" style="max-width:170px"></select>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <label title="pair each class box with its identical caption box: one object, caption shown under the box; propagation duplicates both">
+        <input type="checkbox" id="captionMode" checked> caption mode (class + caption = one object)</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>SAM3 propagation</h2>
+    <div class="row"><label>from frame</label>
+      <input type="number" id="propStart" min="0">
+      <button id="propHere" title="use current frame">⌖ current</button></div>
+    <div class="row"><label>to frame</label>
+      <input type="number" id="propEnd" min="1">
+      <button id="propToGap" title="end of the unannotated gap after start">→ gap end</button></div>
+    <div class="row"><label><input type="checkbox" id="propOnlySel"> only selected box</label></div>
+    <div class="row">
+      <button id="btnPropagate" class="primary">▶ propagate</button>
+      <button id="btnCancelJob" disabled>✖ cancel</button>
+      <button id="btnUndoRun" disabled title="delete all boxes created by last run">⎌ undo run</button>
+    </div>
+    <progress id="jobProg" value="0" max="1" style="display:none"></progress>
+    <div id="jobMsg"></div>
+    <div class="row" style="margin-top:4px">
+      <label><input type="checkbox" id="followJob" checked> follow new frames live</label></div>
+  </div>
+
+  <div class="card">
+    <h2>Save / export</h2>
+    <div class="row">
+      <button id="btnSave">💾 save working copy</button>
+      <button id="btnExport" class="primary">⬇ export COCO</button>
+    </div>
+    <div id="exportMsg" style="font-size:11px;color:var(--dim)"></div>
+  </div>
+
+  <div class="card" id="statsCard">
+    <h2>Coverage</h2>
+    <div id="stats" style="font-size:12px;color:var(--dim)">–</div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const api = (p, opt) => fetch(p, opt).then(r => {
+  if (!r.ok) return r.json().then(e => { throw new Error(e.detail || r.statusText); });
+  return r.json();
+});
+
+// ---------- state ----------
+let video = null;        // meta {id, nframes, width, height, fps, categories, density, manual}
+let frame = 0;
+let annCache = {};       // frame -> [ann]
+let fetchedRanges = [];  // [start,end] fetched
+let selected = null;     // ann id
+let playing = false, playTimer = null;
+let job = null, jobTimer = null, lastRunId = null;
+let mode = "idle";       // idle | draw | move | resize
+let catColors = {};
+const SRC_COLOR = { original:"#31c8d8", manual:"#5ee05e", sam3:"#ff9f43", edited:"#ffd94d" };
+
+// view transform (zoom/pan)
+let view = { s:1, x:0, y:0 };   // screen = img*s + offset
+const cv = $("viewer"), ctx = cv.getContext("2d");
+const tl = $("timeline"), tctx = tl.getContext("2d");
+let img = new Image(), imgFrame = -1, pendingFrame = -1;
+
+// ---------- video list ----------
+async function loadList() {
+  const vids = await api("/api/videos");
+  const el = $("videoList"); el.innerHTML = "";
+  for (const v of vids) {
+    const d = document.createElement("div");
+    d.className = "vid"; d.id = "vid_" + v.id;
+    d.innerHTML = `<div class="name">${v.id}</div>
+      <div class="sub">${v.split}/${v.day}
+      <span class="badge ${v.has_labels?"":"no"}">${v.has_labels?"labels":"no labels"}</span></div>`;
+    d.onclick = () => openVideo(v.id);
+    el.appendChild(d);
+  }
+}
+
+async function openVideo(id) {
+  document.querySelectorAll(".vid").forEach(e => e.classList.remove("active"));
+  const el = $("vid_" + id); if (el) el.classList.add("active");
+  toast("loading " + id + " …");
+  video = await api(`/api/video/${id}/meta`);
+  annCache = {}; fetchedRanges = []; selected = null; frame = 0; imgFrame = -1;
+  view = { s:1, x:0, y:0 };
+  catColors = {};
+  video.categories.forEach((c, i) => {
+    catColors[c.id] = `hsl(${(i*49)%360} 75% 60%)`;
+  });
+  rebuildCatDropdowns();
+  $("frameInput").max = video.nframes - 1;
+  $("propStart").max = $("propEnd").max = video.nframes - 1;
+  updateStats();
+  fitView();
+  seek(0, true);
+  toast(`${id}: ${video.nframes} frames, ${video.categories.length} categories (${video.loaded_from})`);
+}
+
+function updateStats() {
+  const n = video.nframes;
+  const covered = video.density.filter(c => c > 0).length;
+  const totAnn = video.density.reduce((a,b)=>a+b,0);
+  $("stats").innerHTML =
+    `${n} frames · <b style="color:var(--fg)">${covered}</b> annotated ` +
+    `(${(100*covered/n).toFixed(1)}%)<br>` +
+    `<b style="color:var(--fg)">${n-covered}</b> empty frames · ${totAnn} boxes`;
+}
+
+// ---------- annotations ----------
+async function ensureAnns(f0, f1) {
+  f0 = Math.max(0, f0); f1 = Math.min(video.nframes - 1, f1);
+  for (const [a,b] of fetchedRanges) if (f0 >= a && f1 <= b) return;
+  const s = Math.max(0, f0 - 200), e = Math.min(video.nframes - 1, f1 + 400);
+  const data = await api(`/api/video/${video.id}/annotations?start=${s}&end=${e}`);
+  for (let f = s; f <= e; f++) annCache[f] = data[f] || annCache[f] || [];
+  fetchedRanges.push([s, e]);
+}
+function anns(f) { return annCache[f] || []; }
+
+// ---------- caption mode ----------
+// The dataset encodes an object's caption as a second, identical bbox whose
+// category is "_ "-prefixed (Roboflow workaround). In caption mode we pair
+// them: one visual object, caption drawn under the box, edits/propagation
+// applied to both.
+function capMode() { return $("captionMode").checked; }
+function isCapCat(id) {
+  const c = video && video.categories.find(c => c.id === id);
+  return !!(c && c.caption);
+}
+function iou(a, b) {
+  const ix = Math.max(0, Math.min(a[0]+a[2], b[0]+b[2]) - Math.max(a[0], b[0]));
+  const iy = Math.max(0, Math.min(a[1]+a[3], b[1]+b[3]) - Math.max(a[1], b[1]));
+  const inter = ix * iy, uni = a[2]*a[3] + b[2]*b[3] - inter;
+  return uni > 0 ? inter / uni : 0;
+}
+function pairInfo(list) {
+  const hide = new Set(), capOf = new Map();   // classAnnId -> captionAnn
+  if (!capMode()) return { hide, capOf };
+  const caps = list.filter(a => isCapCat(a.category_id));
+  const cls = list.filter(a => !isCapCat(a.category_id));
+  const used = new Set();
+  for (const c of caps) {
+    let best = null, bi = 0.85;
+    for (const k of cls) {
+      if (used.has(k.id)) continue;
+      const i = iou(c.bbox, k.bbox);
+      if (i > bi) { bi = i; best = k; }
+    }
+    if (best) { hide.add(c.id); capOf.set(best.id, c); used.add(best.id); }
+  }
+  return { hide, capOf };
+}
+function catName(id) {
+  const c = video.categories.find(c => c.id === id);
+  return c ? c.name : id;
+}
+function rebuildCatDropdowns() {
+  const sel = $("newCat"); sel.innerHTML = "";
+  const cats = capMode()
+    ? video.categories.filter(c => !c.caption) : video.categories;
+  for (const c of cats) {
+    const o = document.createElement("option");
+    o.value = c.id; o.textContent = c.name; sel.appendChild(o);
+  }
+  const cap = $("newCap"); cap.innerHTML = "";
+  const none = document.createElement("option");
+  none.value = 0; none.textContent = "— no caption —"; cap.appendChild(none);
+  for (const c of video.categories.filter(c => c.caption)) {
+    const o = document.createElement("option");
+    o.value = c.id; o.textContent = c.name; cap.appendChild(o);
+  }
+  $("newCapRow").style.display = capMode() ? "" : "none";
+}
+function findAnn(id) {
+  for (const f in annCache) for (const a of annCache[f]) if (a.id === id) return a;
+  return null;
+}
+
+// ---------- viewer ----------
+function fitView() {
+  const r = cv.getBoundingClientRect();
+  cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
+  if (!video) return;
+  const s = Math.min(r.width / video.width, r.height / video.height);
+  view.s = s;
+  view.x = (r.width - video.width * s) / 2;
+  view.y = (r.height - video.height * s) / 2;
+}
+function i2s(p) { return { x: p.x * view.s + view.x, y: p.y * view.s + view.y }; }
+function s2i(p) { return { x: (p.x - view.x) / view.s, y: (p.y - view.y) / view.s }; }
+
+function seek(f, force) {
+  f = Math.max(0, Math.min((video ? video.nframes : 1) - 1, f));
+  frame = f;
+  $("frameInput").value = f;
+  ensureAnns(f, f + 40).then(draw);
+  loadFrameImage(f);
+  drawTimeline();
+  renderAnnList();
+  if (!$("propStart").dataset.touched) $("propStart").value = f;
+}
+
+function loadFrameImage(f) {
+  pendingFrame = f;
+  const im = new Image();
+  im.onload = () => {
+    if (pendingFrame !== f) return; // stale
+    img = im; imgFrame = f; draw();
+  };
+  im.src = `/api/video/${video.id}/frame/${f}`;
+}
+
+function draw() {
+  if (!video) return;
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const r = cv.getBoundingClientRect();
+  ctx.fillStyle = "#0b0c0f"; ctx.fillRect(0, 0, r.width, r.height);
+  ctx.save();
+  ctx.translate(view.x, view.y); ctx.scale(view.s, view.s);
+  if (imgFrame >= 0) ctx.drawImage(img, 0, 0, video.width, video.height);
+  const lw = Math.max(1.2 / view.s, 0.8);
+  const { hide, capOf } = pairInfo(anns(frame));
+  for (const a of anns(frame)) {
+    if (hide.has(a.id)) continue;   // caption twin, drawn as text on its class box
+    const [x, y, w, h] = a.bbox;
+    const col = SRC_COLOR[a.source] || catColors[a.category_id] || "#fff";
+    ctx.strokeStyle = col; ctx.lineWidth = a.id === selected ? lw * 2.2 : lw;
+    ctx.strokeRect(x, y, w, h);
+    if (a.id === selected) {
+      ctx.fillStyle = col + "33"; ctx.fillRect(x, y, w, h);
+      // resize handles
+      ctx.fillStyle = "#fff";
+      const hs = 5 / view.s;
+      for (const [hx, hy] of handlePts(a.bbox))
+        ctx.fillRect(hx - hs/2, hy - hs/2, hs, hs);
+    }
+    if (view.s > 0.55) {
+      ctx.font = `${11/view.s}px sans-serif`;
+      ctx.fillStyle = col;
+      ctx.fillText(catName(a.category_id), x, y - 3/view.s);
+      const cap = capOf.get(a.id);
+      if (cap) {   // caption below the bbox
+        ctx.font = `italic ${10.5/view.s}px sans-serif`;
+        ctx.fillStyle = "#ffe9a8";
+        ctx.fillText("“" + catName(cap.category_id) + "”", x, y + h + 11/view.s);
+      }
+    }
+  }
+  if (mode === "draw" && drawBox) {
+    ctx.strokeStyle = "#fff"; ctx.setLineDash([6/view.s, 4/view.s]); ctx.lineWidth = lw;
+    ctx.strokeRect(drawBox.x, drawBox.y, drawBox.w, drawBox.h);
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+  $("hud").textContent =
+    `frame ${frame} / ${video.nframes - 1}  ·  ${(frame / (video.fps||30)).toFixed(2)} s` +
+    `  ·  ${anns(frame).length} boxes  ·  zoom ${(view.s).toFixed(2)}×`;
+}
+
+function handlePts(b) {
+  const [x, y, w, h] = b;
+  return [[x,y],[x+w,y],[x,y+h],[x+w,y+h],[x+w/2,y],[x+w/2,y+h],[x,y+h/2],[x+w,y+h/2]];
+}
+
+// ---------- timeline ----------
+function drawTimeline() {
+  if (!video) return;
+  const r = tl.getBoundingClientRect();
+  tl.width = r.width * devicePixelRatio; tl.height = 46 * devicePixelRatio;
+  tctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const W = r.width, H = 46, n = video.nframes;
+  tctx.fillStyle = "#101216"; tctx.fillRect(0, 0, W, H);
+  const bins = Math.min(W|0, n);
+  const per = n / bins;
+  let maxC = 1;
+  for (const c of video.density) if (c > maxC) maxC = c;
+  for (let b = 0; b < bins; b++) {
+    const f0 = Math.floor(b * per), f1 = Math.max(f0, Math.floor((b+1) * per) - 1);
+    let c = 0, m = 0, any = false;
+    for (let f = f0; f <= f1; f++) {
+      if (video.density[f] > c) c = video.density[f];
+      if (video.manual[f] > m) m = video.manual[f];
+      if (video.density[f] > 0) any = true;
+    }
+    const x = b * W / bins, bw = Math.ceil(W / bins);
+    if (!any) { tctx.fillStyle = "#57202a"; tctx.fillRect(x, 0, bw, H); }
+    else {
+      const v = Math.min(1, c / maxC);
+      tctx.fillStyle = `rgba(49,200,216,${0.25 + 0.75*v})`;
+      tctx.fillRect(x, H - (6 + v * (H-8)), bw, 6 + v * (H-8));
+      if (m > 0) { tctx.fillStyle = "#ff9f43"; tctx.fillRect(x, 0, bw, 4); }
+    }
+  }
+  // job range
+  if (job && (job.status === "tracking" || job.status === "extracting")) {
+    tctx.fillStyle = "rgba(255,159,67,.25)";
+    tctx.fillRect(job.start * W / n, 0, (job.end - job.start) * W / n, H);
+  }
+  // cursor
+  const cx = frame * W / n;
+  tctx.strokeStyle = "#fff"; tctx.lineWidth = 1.5;
+  tctx.beginPath(); tctx.moveTo(cx, 0); tctx.lineTo(cx, H); tctx.stroke();
+}
+tl.addEventListener("pointerdown", e => { tlSeek(e); tl.setPointerCapture(e.pointerId); });
+tl.addEventListener("pointermove", e => { if (e.buttons) tlSeek(e); });
+function tlSeek(e) {
+  if (!video) return;
+  const r = tl.getBoundingClientRect();
+  seek(Math.round((e.clientX - r.left) / r.width * (video.nframes - 1)));
+}
+
+// ---------- annotation list ----------
+function renderAnnList() {
+  const el = $("annList"); el.innerHTML = "";
+  const list = anns(frame);
+  const { hide, capOf } = pairInfo(list);
+  const shown = list.filter(a => !hide.has(a.id));
+  $("annCount").textContent = capMode()
+    ? `(${shown.length} obj / ${list.length} boxes)` : `(${list.length})`;
+  for (const a of shown) {
+    const cap = capOf.get(a.id);
+    const d = document.createElement("div");
+    d.className = "annRow" + (a.id === selected ? " sel" : "");
+    d.innerHTML = `<span class="dot" style="background:${SRC_COLOR[a.source]||"#999"}"></span>
+      <span class="cat">${catName(a.category_id)}${cap ? ` <i style="color:#ffe9a8">“${catName(cap.category_id)}”</i>` : ""}</span>
+      <span class="src">${a.source}${a.track_id?" t"+a.track_id:""}</span>
+      <span class="del" title="delete">✕</span>`;
+    d.onclick = ev => {
+      if (ev.target.classList.contains("del")) { deleteAnn(a.id); return; }
+      selected = a.id; draw(); renderAnnList();
+    };
+    el.appendChild(d);
+  }
+}
+
+async function deleteAnn(id) {
+  const ids = [id];
+  const cap = pairInfo(anns(frame)).capOf.get(id);
+  if (cap) ids.push(cap.id);      // caption twin goes with its object
+  for (const i of ids)
+    await api(`/api/video/${video.id}/annotations/${i}`, { method:"DELETE" });
+  for (const f in annCache) annCache[f] = annCache[f].filter(a => !ids.includes(a.id));
+  if (selected === id) selected = null;
+  refreshDensityLocal();
+  draw(); renderAnnList(); drawTimeline();
+}
+
+function refreshDensityLocal() {
+  // recompute density for cached frames only (cheap, keeps timeline honest)
+  for (const f in annCache) {
+    const fi = +f;
+    video.density[fi] = annCache[f].length;
+    video.manual[fi] = annCache[f].filter(a => ["manual","sam3","edited"].includes(a.source)).length;
+  }
+  updateStats();
+}
+
+// ---------- mouse interactions on viewer ----------
+let drawBox = null, dragStart = null, dragMode = null, dragAnn = null, dragHandle = -1,
+    dragCap = null;
+
+cv.addEventListener("pointerdown", e => {
+  if (!video) return;
+  cv.setPointerCapture(e.pointerId);
+  const p = s2i({ x: e.offsetX, y: e.offsetY });
+  if (mode === "draw") {
+    drawBox = { x: p.x, y: p.y, w: 0, h: 0, ox: p.x, oy: p.y };
+    return;
+  }
+  // handle hit?
+  if (selected != null) {
+    const a = anns(frame).find(a => a.id === selected);
+    if (a) {
+      const pts = handlePts(a.bbox), tol = 7 / view.s;
+      for (let i = 0; i < pts.length; i++) {
+        if (Math.abs(p.x - pts[i][0]) < tol && Math.abs(p.y - pts[i][1]) < tol) {
+          dragMode = "resize"; dragAnn = a; dragHandle = i; dragStart = p;
+          dragCap = pairInfo(anns(frame)).capOf.get(a.id) || null;
+          dragAnn._orig = [...a.bbox]; return;
+        }
+      }
+    }
+  }
+  // box hit? smallest box wins (caption twins are not hit targets)
+  let hit = null, hitArea = 1e18;
+  const hidden = pairInfo(anns(frame)).hide;
+  for (const a of anns(frame)) {
+    if (hidden.has(a.id)) continue;
+    const [x, y, w, h] = a.bbox;
+    if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h && w * h < hitArea) {
+      hit = a; hitArea = w * h;
+    }
+  }
+  if (hit) {
+    selected = hit.id; dragMode = "move"; dragAnn = hit; dragStart = p;
+    dragCap = pairInfo(anns(frame)).capOf.get(hit.id) || null;
+    dragAnn._orig = [...hit.bbox];
+    draw(); renderAnnList();
+  } else {
+    dragMode = "pan"; dragStart = { x: e.offsetX, y: e.offsetY, vx: view.x, vy: view.y };
+    if (selected != null) { selected = null; draw(); renderAnnList(); }
+  }
+});
+
+cv.addEventListener("pointermove", e => {
+  if (!video) return;
+  const p = s2i({ x: e.offsetX, y: e.offsetY });
+  if (mode === "draw" && drawBox) {
+    drawBox.x = Math.min(p.x, drawBox.ox); drawBox.y = Math.min(p.y, drawBox.oy);
+    drawBox.w = Math.abs(p.x - drawBox.ox); drawBox.h = Math.abs(p.y - drawBox.oy);
+    draw(); return;
+  }
+  if (!e.buttons || !dragMode) return;
+  if (dragMode === "pan") {
+    view.x = dragStart.vx + (e.offsetX - dragStart.x);
+    view.y = dragStart.vy + (e.offsetY - dragStart.y);
+    draw(); return;
+  }
+  const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+  const o = dragAnn._orig;
+  if (dragMode === "move") {
+    dragAnn.bbox = [o[0] + dx, o[1] + dy, o[2], o[3]];
+  } else if (dragMode === "resize") {
+    let [x, y, w, h] = o;
+    let x2 = x + w, y2 = y + h;
+    const H = dragHandle;
+    if ([0,2,6].includes(H)) x += dx;
+    if ([1,3,7].includes(H)) x2 += dx;
+    if ([0,1,4].includes(H)) y += dy;
+    if ([2,3,5].includes(H)) y2 += dy;
+    dragAnn.bbox = [Math.min(x,x2), Math.min(y,y2), Math.abs(x2-x), Math.abs(y2-y)];
+  }
+  if (dragCap) dragCap.bbox = [...dragAnn.bbox];
+  draw();
+});
+
+cv.addEventListener("pointerup", async e => {
+  if (mode === "draw" && drawBox) {
+    if (drawBox.w > 3 && drawBox.h > 3) {
+      const bbox = [drawBox.x, drawBox.y, drawBox.w, drawBox.h];
+      const ann = await api(`/api/video/${video.id}/annotations`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frame, category_id: +$("newCat").value, bbox })});
+      (annCache[frame] = annCache[frame] || []).push(ann);
+      const capCat = capMode() ? +$("newCap").value : 0;
+      if (capCat) {   // duplicate bbox carrying the caption category
+        const capAnn = await api(`/api/video/${video.id}/annotations`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frame, category_id: capCat, bbox })});
+        annCache[frame].push(capAnn);
+      }
+      selected = ann.id;
+      refreshDensityLocal(); drawTimeline(); renderAnnList();
+    }
+    drawBox = null; setMode("idle"); draw(); return;
+  }
+  if ((dragMode === "move" || dragMode === "resize") && dragAnn) {
+    const changed = JSON.stringify(dragAnn.bbox) !== JSON.stringify(dragAnn._orig);
+    if (changed) {
+      const upd = await api(`/api/video/${video.id}/annotations/${dragAnn.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bbox: dragAnn.bbox })});
+      dragAnn.source = upd.source;
+      if (dragCap) {              // caption twin follows its object
+        dragCap.bbox = [...dragAnn.bbox];
+        const cu = await api(`/api/video/${video.id}/annotations/${dragCap.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bbox: dragCap.bbox })});
+        dragCap.source = cu.source;
+      }
+      renderAnnList();
+    }
+    delete dragAnn._orig;
+  }
+  dragMode = null; dragAnn = null; dragCap = null;
+});
+
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.15 : 1/1.15;
+  const ns = Math.max(0.05, Math.min(24, view.s * f));
+  const k = ns / view.s;
+  view.x = e.offsetX - k * (e.offsetX - view.x);
+  view.y = e.offsetY - k * (e.offsetY - view.y);
+  view.s = ns;
+  draw();
+}, { passive: false });
+
+cv.addEventListener("dblclick", () => { fitView(); draw(); });
+
+function setMode(m) {
+  mode = m;
+  cv.style.cursor = m === "draw" ? "crosshair" : "default";
+  $("btnNewBox").style.borderColor = m === "draw" ? "var(--accent)" : "";
+}
+
+// ---------- playback ----------
+function togglePlay(on) {
+  playing = on === undefined ? !playing : on;
+  $("btnPlay").textContent = playing ? "⏸" : "▶";
+  clearInterval(playTimer);
+  if (playing) {
+    playTimer = setInterval(() => {
+      if (frame >= video.nframes - 1) { togglePlay(false); return; }
+      seek(frame + 1);
+    }, 1000 / (+$("speed").value));
+  }
+}
+
+// ---------- gaps ----------
+function nextGap(from) {
+  for (let f = from + 1; f < video.nframes; f++)
+    if (video.density[f] === 0) return f;
+  return -1;
+}
+function gapEnd(from) {
+  let f = from;
+  while (f < video.nframes && video.density[f] === 0) f++;
+  return Math.min(f, video.nframes - 1);
+}
+
+// ---------- propagation ----------
+$("propHere").onclick = () => { $("propStart").value = frame; $("propStart").dataset.touched = 1; suggestEnd(); };
+$("propToGap").onclick = suggestEnd;
+function suggestEnd() {
+  const s = +$("propStart").value;
+  const g = nextGap(s);
+  if (g < 0) { $("propEnd").value = Math.min(s + 300, video.nframes - 1); return; }
+  $("propEnd").value = Math.min(gapEnd(g) + 5, video.nframes - 1, s + 3000);
+}
+
+$("btnPropagate").onclick = async () => {
+  const start = +$("propStart").value, end = +$("propEnd").value;
+  const body = { start, end };
+  if ($("propOnlySel").checked) {
+    if (selected == null) { toast("no box selected"); return; }
+    body.ann_ids = [selected];
+  }
+  if (capMode()) {
+    // pair class+caption boxes on the start frame: track once, emit both
+    const startAnns = (await api(
+      `/api/video/${video.id}/annotations?start=${start}&end=${start}`))[start] || [];
+    const { hide, capOf } = pairInfo(startAnns);
+    body.exclude_ids = [...hide];
+    body.extra_cats = {};
+    for (const [clsId, cap] of capOf)
+      body.extra_cats[clsId] = [cap.category_id];
+  }
+  try {
+    job = await api(`/api/video/${video.id}/propagate`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)});
+  } catch (err) { toast("✗ " + err.message); return; }
+  lastRunId = job.id;
+  $("btnPropagate").disabled = true; $("btnCancelJob").disabled = false;
+  $("jobProg").style.display = "block";
+  let lastSeen = start;
+  jobTimer = setInterval(async () => {
+    try {
+      job = await api(`/api/job/${job.id}?since_frame=${lastSeen}`);
+    } catch (err) {
+      clearInterval(jobTimer);
+      $("btnPropagate").disabled = false; $("btnCancelJob").disabled = true;
+      $("jobMsg").textContent = "job lost (server restarted?) — reload the page and run again";
+      toast("✗ job lost — reload page and re-run propagation");
+      return;
+    }
+    $("jobProg").value = job.progress;
+    $("jobMsg").textContent = `${job.status} · frame ${job.current_frame}/${job.end}` +
+      ` · ${job.n_created} boxes` +
+      (Object.keys(job.lost).length ? ` · lost: ${JSON.stringify(job.lost)}` : "");
+    if (job.new && job.new.length) {
+      for (const a of job.new) {
+        (annCache[a.frame] = annCache[a.frame] || []).push(a);
+        if (a.frame > lastSeen) lastSeen = a.frame;
+      }
+      refreshDensityLocal();
+      if ($("followJob").checked && job.status === "tracking") seek(job.current_frame);
+      else { draw(); drawTimeline(); renderAnnList(); }
+    }
+    if (["done","error","cancelled"].includes(job.status)) {
+      clearInterval(jobTimer);
+      $("btnPropagate").disabled = false; $("btnCancelJob").disabled = true;
+      $("btnUndoRun").disabled = false;
+      $("jobMsg").textContent = `${job.status}: ${job.message}`;
+      toast(job.status === "done" ? `✓ ${job.message}` : `${job.status}: ${job.message}`);
+      // refetch range to be authoritative
+      fetchedRanges = []; annCache = {};
+      await ensureAnns(frame, frame + 40);
+      const meta = await api(`/api/video/${video.id}/meta`);
+      video.density = meta.density; video.manual = meta.manual;
+      updateStats(); draw(); drawTimeline(); renderAnnList();
+    }
+  }, 700);
+};
+
+$("btnCancelJob").onclick = () => job && api(`/api/job/${job.id}/cancel`, { method:"POST" });
+$("btnUndoRun").onclick = async () => {
+  if (!lastRunId) return;
+  const r = await api(`/api/video/${video.id}/run/${lastRunId}`, { method:"DELETE" });
+  toast(`undo: removed ${r.deleted} boxes`);
+  $("btnUndoRun").disabled = true;
+  fetchedRanges = []; annCache = {};
+  const meta = await api(`/api/video/${video.id}/meta`);
+  video.density = meta.density; video.manual = meta.manual;
+  await ensureAnns(frame, frame + 40);
+  updateStats(); draw(); drawTimeline(); renderAnnList();
+};
+
+// ---------- save / export ----------
+$("btnSave").onclick = async () => {
+  const r = await api(`/api/video/${video.id}/save`, { method:"POST" });
+  toast("saved → " + r.path.split("/").slice(-2).join("/"));
+};
+$("btnExport").onclick = async () => {
+  const r = await api(`/api/video/${video.id}/export`, { method:"POST" });
+  $("exportMsg").innerHTML = `exported: ${r.path}<br><a href="${r.download}" style="color:var(--accent)">download JSON</a>`;
+  toast("exported ✓");
+};
+
+// ---------- controls ----------
+$("btnPlay").onclick = () => togglePlay();
+document.querySelectorAll("[data-step]").forEach(b =>
+  b.onclick = () => seek(frame + (+b.dataset.step)));
+$("frameInput").onchange = e => seek(+e.target.value);
+$("btnGap").onclick = () => { const g = nextGap(frame); if (g >= 0) seek(g); else toast("no gaps after this frame 🎉"); };
+$("btnNewBox").onclick = () => setMode(mode === "draw" ? "idle" : "draw");
+$("propStart").oninput = e => { e.target.dataset.touched = 1; };
+try { const v = localStorage.getItem("captionMode");
+      if (v !== null) $("captionMode").checked = v === "1"; } catch (e) {}
+$("captionMode").onchange = () => {
+  try { localStorage.setItem("captionMode", capMode() ? "1" : "0"); } catch (e) {}
+  if (video) { rebuildCatDropdowns(); draw(); renderAnnList(); }
+};
+
+window.addEventListener("keydown", e => {
+  if (!video || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  const st = e.ctrlKey ? 30 : e.shiftKey ? 10 : 1;
+  if (e.key === "ArrowRight") { seek(frame + st); e.preventDefault(); }
+  else if (e.key === "ArrowLeft") { seek(frame - st); e.preventDefault(); }
+  else if (e.key === " ") { togglePlay(); e.preventDefault(); }
+  else if (e.key.toLowerCase() === "n") setMode(mode === "draw" ? "idle" : "draw");
+  else if (e.key === "Delete" || e.key === "Backspace") { if (selected != null) deleteAnn(selected); }
+  else if (e.key === "Escape") { selected = null; setMode("idle"); draw(); renderAnnList(); }
+  else if (e.key.toLowerCase() === "g") $("btnGap").click();
+});
+
+window.addEventListener("resize", () => { fitView(); draw(); });
+
+let toastT = null;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastT); toastT = setTimeout(() => t.style.display = "none", 3500);
+}
+
+loadList();
+</script>
+</body>
+</html>
