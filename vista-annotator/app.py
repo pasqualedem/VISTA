@@ -1,6 +1,6 @@
 """VISTA Annotator — semi-supervised annotation completion tool.
 
-Run:  cd ~/projects/VISTA/vista-annotator && \
+Run:  cd ~/projects/VISTA/DroneAmbulanceAI/vista-annotator && \
       ~/projects/VISTA/DroneAmbulanceAI/.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8765
 """
 import os
@@ -21,14 +21,14 @@ app = FastAPI(title="VISTA Annotator")
 VIDEOS = {v["id"]: v for v in find_videos()}
 STORES = {}        # video_id -> VideoAnnotations
 JOBS = {}          # job_id -> Job
-_readers = {}      # video_id -> (lock, cv2.VideoCapture, last_pos)
+_readers = {}      # video_id -> (lock, decord.VideoReader, _)
 _store_lock = threading.Lock()
 
 os.makedirs("/media/ssd/pasquale/tmp", exist_ok=True)
 
 
 def video_meta(v):
-    cap = cv2.VideoCapture(v["path"])
+    cap = cv2.VideoCapture(v["path"])   # container metadata only
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -52,21 +52,22 @@ def get_store(vid) -> VideoAnnotations:
 
 
 def read_frame(vid, idx):
+    """Index-accurate decode via decord. The DJI clips are variable-frame-rate,
+    so cv2's CAP_PROP_POS_FRAMES seek (which assumes the nominal rate) drifts
+    progressively out of sync with the frame indices the labels refer to —
+    tens of frames by the middle of a long clip."""
     v = VIDEOS.get(vid)
     if v is None:
         raise HTTPException(404, "unknown video")
     if vid not in _readers:
-        _readers[vid] = [threading.Lock(), cv2.VideoCapture(v["path"]), -2]
-    lk, cap, last = _readers[vid]
+        from decord import VideoReader
+        _readers[vid] = [threading.Lock(), VideoReader(v["path"], num_threads=2), -2]
+    lk, vr, _ = _readers[vid]
     with lk:
-        last = _readers[vid][2]
-        if idx != last + 1:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ok, frame = cap.read()
-        _readers[vid][2] = idx
-        if not ok:
-            raise HTTPException(404, f"frame {idx} unreadable")
-        return frame
+        if not 0 <= idx < len(vr):
+            raise HTTPException(404, f"frame {idx} out of range")
+        rgb = vr[idx].asnumpy()
+        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
 # ---------------- API ----------------

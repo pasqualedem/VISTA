@@ -8,6 +8,8 @@ boxes with **SAM3** (box-prompted video tracking).
 
 ```bash
 cd ~/projects/VISTA/DroneAmbulanceAI/vista-annotator
+# pin to the two RTX 4000 Ada cards (the 4090 is off limits); preferred card first
+export CUDA_VISIBLE_DEVICES=GPU-284ce1c9-9672-01e8-f0c0-1cb2b34ba604,GPU-89ce7cc3-1e86-869f-bb98-2ac15b2f2c43
 ~/projects/VISTA/DroneAmbulanceAI/.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8765
 ```
 

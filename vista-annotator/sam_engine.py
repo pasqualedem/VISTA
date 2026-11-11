@@ -23,13 +23,10 @@ _gpu_lock = threading.Lock()
 
 
 def _pick_device():
-    import torch
-    best, best_free = 0, -1
-    for i in range(torch.cuda.device_count()):
-        free, _ = torch.cuda.mem_get_info(i)
-        if free > best_free:
-            best, best_free = i, free
-    return f"cuda:{best}"
+    """First visible CUDA device. Pin allowed cards (by UUID, preferred first)
+    with CUDA_VISIBLE_DEVICES in the launcher — do NOT probe every card with
+    torch.cuda.mem_get_info(): each probe opens a ~160 MiB context on that GPU."""
+    return "cuda:0"
 
 
 def get_model():

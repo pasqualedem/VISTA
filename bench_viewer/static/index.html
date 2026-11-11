@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>VISTA benchmark — GT vs predizioni</title>
+<style>
+  :root { --bg:#14161a; --panel:#1d2026; --panel2:#23262e; --fg:#dfe3ea; --dim:#8a93a3;
+          --accent:#4da3ff; --tp:#5ee05e; --fp:#ff9f43; --fn:#ff5555; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); height:100vh; display:flex;
+         font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; }
+  #left { width:290px; min-width:290px; background:var(--panel); display:flex;
+          flex-direction:column; border-right:1px solid #000; }
+  #left h1 { font-size:14px; margin:10px; color:var(--accent); }
+  .ctl { padding:0 10px 8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  select, input[type=number] { background:var(--panel2); color:var(--fg); border:1px solid #383d47;
+    border-radius:5px; padding:3px 6px; font-size:12px; max-width:150px; }
+  #list { flex:1; overflow-y:auto; border-top:1px solid #000; }
+  .row { padding:5px 10px; cursor:pointer; border-bottom:1px solid #1a1d23; font-size:12px;
+         display:flex; gap:6px; align-items:center; }
+  .row:hover { background:#252a33; }
+  .row.sel { background:#31415a; }
+  .row .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px;}
+  .pill { font-size:10px; padding:0 4px; border-radius:7px; background:#2c313b; }
+  .pill.fn { background:#5a2020; color:#ffb3b3; }
+  .pill.fp { background:#5a3a1a; color:#ffcf9a; }
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #panes { flex:1; display:flex; min-height:0; }
+  .pane { flex:1; position:relative; min-width:0; border-right:1px solid #000; }
+  .pane:last-child { border-right:none; }
+  .pane h2 { position:absolute; top:8px; left:10px; margin:0; font-size:12px; z-index:2;
+             background:rgba(10,12,16,.8); padding:3px 9px; border-radius:6px; font-weight:600;}
+  canvas { position:absolute; inset:0; width:100%; height:100%; }
+  #bar { background:var(--panel); border-top:1px solid #000; padding:7px 12px;
+         display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  button { background:var(--panel2); color:var(--fg); border:1px solid #383d47;
+           border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
+  button:hover { border-color:var(--accent); }
+  #right { width:310px; min-width:310px; background:var(--panel); border-left:1px solid #000;
+           overflow-y:auto; padding:10px; }
+  .card { background:var(--panel2); border-radius:8px; padding:9px; margin-bottom:10px; }
+  .card h3 { margin:0 0 7px; font-size:11px; color:var(--accent); text-transform:uppercase;
+             letter-spacing:.5px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  td { padding:2px 0; } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .big { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .sub { color:var(--dim); font-size:11px; }
+  .legend span { display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-size:11px;
+                 color:var(--dim); }
+  .sw { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .kbd { background:#2c313b; border-radius:3px; padding:0 4px; font-size:10px; font-family:monospace;}
+  .bad { color:#ff9c9c; } .good { color:#9ce89c; }
+</style>
+</head>
+<body>
+<div id="left">
+  <h1>VISTA benchmark</h1>
+  <div class="ctl">
+    <select id="run"></select>
+    <select id="video"><option value="">tutti i video</option></select>
+  </div>
+  <div class="ctl">
+    <select id="order">
+      <option value="index">ordine del run</option>
+      <option value="worst">peggiori prima (più mancati)</option>
+      <option value="best">migliori prima</option>
+    </select>
+  </div>
+  <div id="list"></div>
+</div>
+
+<div id="main">
+  <div id="panes">
+    <div class="pane"><h2>Ground truth</h2><canvas id="cvGt"></canvas></div>
+    <div class="pane"><h2>Predizioni</h2><canvas id="cvPr"></canvas></div>
+  </div>
+  <div id="bar">
+    <button data-step="-10">−10</button><button data-step="-1">◀</button>
+    <span id="pos" class="sub"></span>
+    <button data-step="1">▶</button><button data-step="10">+10</button>
+    <label class="sub"><input type="checkbox" id="showCap" checked> didascalie</label>
+    <label class="sub"><input type="checkbox" id="onlyErr"> solo errori</label>
+    <span class="legend" style="margin-left:auto">
+      <span><i class="sw" style="background:var(--tp)"></i>TP</span>
+      <span><i class="sw" style="background:var(--fp)"></i>FP (falso positivo)</span>
+      <span><i class="sw" style="background:var(--fn)"></i>FN (mancato)</span>
+      <span class="kbd">←</span><span class="kbd">→</span> naviga · rotella = zoom
+    </span>
+  </div>
+</div>
+
+<div id="right">
+  <div class="card">
+    <h3>Questo fotogramma</h3>
+    <div id="frameStats"></div>
+  </div>
+  <div class="card">
+    <h3>Detection (tutto il run)</h3>
+    <div id="apBox"></div>
+  </div>
+  <div class="card">
+    <h3>AP@0.5 per classe</h3>
+    <table id="perCls"></table>
+  </div>
+  <div class="card">
+    <h3>Captioning</h3>
+    <div id="capBox"></div>
+  </div>
+  <div class="card">
+    <h3>Costo</h3>
+    <table id="costBox"></table>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const api = p => fetch(p).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const COL = { TP:"#5ee05e", FP:"#ff9f43", FN:"#ff5555" };
+
+let run = null, items = [], idx = 0, cur = null, img = new Image();
+let view = { s:1, x:0, y:0 };
+const cvGt = $("cvGt"), cvPr = $("cvPr");
+
+async function boot() {
+  const runs = await api("/api/runs");
+  $("run").innerHTML = runs.map(r => `<option>${r}</option>`).join("");
+  run = runs[0];
+  await loadRun();
+}
+
+async function loadRun() {
+  const m = await api(`/api/run/${run}/metrics`);
+  renderMetrics(m);
+  await loadList();
+}
+
+async function loadList() {
+  const d = await api(`/api/run/${run}/images?video=${encodeURIComponent($("video").value)}&order=${$("order").value}`);
+  if ($("video").options.length <= 1)
+    $("video").innerHTML = '<option value="">tutti i video</option>' +
+      d.videos.map(v => `<option>${v}</option>`).join("");
+  items = d.images;
+  if ($("onlyErr").checked) items = items.filter(x => x.fn || x.fp);
+  renderList();
+  idx = 0;
+  if (items.length) show(0);
+}
+
+function renderList() {
+  $("list").innerHTML = items.map((x, i) =>
+    `<div class="row${i===idx?" sel":""}" data-i="${i}">
+      <span class="nm">${x.video.slice(-13)} · ${x.frame}</span>
+      <span class="pill">${x.tp}/${x.n_gt}</span>
+      ${x.fn?`<span class="pill fn">−${x.fn}</span>`:""}
+      ${x.fp?`<span class="pill fp">+${x.fp}</span>`:""}
+    </div>`).join("");
+  [...$("list").children].forEach(el =>
+    el.onclick = () => show(+el.dataset.i));
+}
+
+async function show(i) {
+  if (!items.length) return;
+  idx = Math.max(0, Math.min(items.length - 1, i));
+  renderList();
+  const sel = $("list").children[idx];
+  if (sel) sel.scrollIntoView({ block:"nearest" });
+  const it = items[idx];
+  cur = await api(`/api/run/${run}/image/${it.id}`);
+  $("pos").textContent = `${idx+1} / ${items.length} — ${it.video} · frame ${it.frame}`;
+  const s = cur.stats;
+  const rec = s.n_gt ? (100*s.tp/s.n_gt).toFixed(0) : "—";
+  const prec = s.n_pred ? (100*s.tp/s.n_pred).toFixed(0) : "—";
+  $("frameStats").innerHTML =
+    `<table>
+      <tr><td>oggetti veri</td><td>${s.n_gt}</td></tr>
+      <tr><td>predetti</td><td>${s.n_pred}</td></tr>
+      <tr><td class="good">trovati (TP)</td><td>${s.tp}</td></tr>
+      <tr><td class="bad">mancati (FN)</td><td>${s.fn}</td></tr>
+      <tr><td style="color:#ffcf9a">falsi positivi</td><td>${s.fp}</td></tr>
+      <tr><td>recall / precisione</td><td>${rec}% / ${prec}%</td></tr>
+    </table>`;
+  img = new Image();
+  img.onload = () => { fit(); draw(); };
+  img.src = `/api/frame/${it.id}`;
+}
+
+function fit() {
+  for (const c of [cvGt, cvPr]) {
+    const r = c.getBoundingClientRect();
+    c.width = r.width * devicePixelRatio; c.height = r.height * devicePixelRatio;
+  }
+  const r = cvGt.getBoundingClientRect();
+  const s = Math.min(r.width / img.width, r.height / img.height);
+  view = { s, x:(r.width - img.width*s)/2, y:(r.height - img.height*s)/2 };
+}
+
+function drawOne(cv, boxes, kind) {
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  const r = cv.getBoundingClientRect();
+  ctx.fillStyle = "#0b0c0f"; ctx.fillRect(0,0,r.width,r.height);
+  ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.s, view.s);
+  ctx.drawImage(img, 0, 0);
+  const lw = Math.max(1.4/view.s, .7), fs = 12/view.s;
+  ctx.font = `${fs}px sans-serif`;
+  for (const b of boxes) {
+    const [x,y,w,h] = b.bbox;
+    const st = b.status;
+    ctx.strokeStyle = COL[st] || "#ccc";
+    ctx.lineWidth = st === "FN" ? lw*2 : lw;
+    if (st === "FN") ctx.setLineDash([6/view.s, 3/view.s]); else ctx.setLineDash([]);
+    ctx.strokeRect(x,y,w,h);
+    if (view.s > .35) {
+      let lab = b.cls || b.class || "";
+      if ($("showCap").checked && b.caption) lab += " | " + b.caption;
+      if (kind === "pred" && b.cls_ok === false) lab += " ✗cls";
+      if (kind === "pred" && b.cap_ok === false) lab += " ✗cap";
+      const tw = ctx.measureText(lab).width + 6/view.s;
+      ctx.fillStyle = (COL[st]||"#ccc") + "dd";
+      ctx.fillRect(x, y - fs - 3/view.s, tw, fs + 3/view.s);
+      ctx.fillStyle = "#111";
+      ctx.fillText(lab, x + 3/view.s, y - 4/view.s);
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function draw() {
+  if (!cur || !img.width) return;
+  drawOne(cvGt, cur.gt, "gt");
+  drawOne(cvPr, cur.pred, "pred");
+}
+
+function renderMetrics(m) {
+  const c = m.cost || {};
+  $("apBox").innerHTML =
+    `<div><span class="big">${m.AP50.ap}</span> <span class="sub">AP@0.5 class-agnostic</span></div>
+     <div class="sub">${m.AP50.matched} / ${m.AP50.total} oggetti agganciati
+       (${(100*m.AP50.matched/m.AP50.total).toFixed(0)}% recall)</div>
+     <table style="margin-top:7px">
+       <tr><td>AP@0.75</td><td>${m.AP75.ap}</td></tr>
+       <tr><td>mAP@0.5 (media classi)</td><td>${m.mAP50}</td></tr>
+       <tr><td>immagini</td><td>${m.n_images}</td></tr>
+       <tr><td>predizioni / oggetti</td><td>${m.n_pred} / ${m.n_gt}</td></tr>
+     </table>`;
+  $("perCls").innerHTML = Object.entries(m.per_class)
+    .sort((a,b) => b[1].total - a[1].total)
+    .map(([k,v]) => `<tr><td>${k}</td><td>${v.ap} <span class="sub">(${v.matched}/${v.total})</span></td></tr>`)
+    .join("");
+  $("capBox").innerHTML = m.caption_acc == null ? '<span class="sub">n/d</span>' :
+    `<div><span class="big">${m.caption_acc}%</span> <span class="sub">su ${m.caption_n} oggetti presi</span></div>
+     <table style="margin-top:7px">` +
+     m.confusions.map(x => `<tr><td class="${x.ok?"good":"bad"}">${x.want} → ${x.got}</td><td>${x.n}</td></tr>`).join("") +
+     `</table>`;
+  $("costBox").innerHTML = Object.entries(c)
+    .filter(([,v]) => v !== null && v !== undefined)
+    .map(([k,v]) => `<tr><td>${k}</td><td>${typeof v === "number" ? (+v).toFixed(2).replace(/\.00$/,"") : v}</td></tr>`)
+    .join("");
+}
+
+// ---- interazione ----
+document.querySelectorAll("[data-step]").forEach(b =>
+  b.onclick = () => show(idx + (+b.dataset.step)));
+$("run").onchange = async e => { run = e.target.value; await loadRun(); };
+$("video").onchange = loadList;
+$("order").onchange = loadList;
+$("onlyErr").onchange = loadList;
+$("showCap").onchange = draw;
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") { show(idx + (e.shiftKey?10:1)); e.preventDefault(); }
+  if (e.key === "ArrowLeft")  { show(idx - (e.shiftKey?10:1)); e.preventDefault(); }
+});
+for (const cv of [cvGt, cvPr]) {
+  cv.addEventListener("wheel", e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.15 : 1/1.15;
+    const ns = Math.max(.05, Math.min(30, view.s * f)), k = ns / view.s;
+    view.x = e.offsetX - k*(e.offsetX - view.x);
+    view.y = e.offsetY - k*(e.offsetY - view.y);
+    view.s = ns; draw();
+  }, { passive:false });
+  let drag = null;
+  cv.addEventListener("pointerdown", e => { drag = { x:e.offsetX, y:e.offsetY, vx:view.x, vy:view.y }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => {
+    if (!drag || !e.buttons) return;
+    view.x = drag.vx + (e.offsetX - drag.x); view.y = drag.vy + (e.offsetY - drag.y); draw();
+  });
+  cv.addEventListener("pointerup", () => drag = null);
+  cv.addEventListener("dblclick", () => { fit(); draw(); });
+}
+window.addEventListener("resize", () => { fit(); draw(); });
+boot();
+</script>
+</body>
+</html>
